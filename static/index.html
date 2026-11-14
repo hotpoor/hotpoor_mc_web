@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>方块战场 · 我的世界网页版</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body>
+
+<canvas id="view"></canvas>
+<div id="nameplates"></div>
+<div id="floaters"></div>
+<div id="damage-flash"></div>
+<div id="heal-glow"></div>
+<div id="vignette"></div>
+<div id="crosshair" class="hidden"></div>
+<div id="view-hint" class="hidden">第一人称：<b>点击画面</b>锁定鼠标自由环视，或<b>按住右键拖动</b>转视角 · <b>Esc</b> 释放 · <b>V</b> 切回第三人称</div>
+
+<header id="topbar">
+  <div class="brand">
+    <div class="brand-cube"></div>
+    <div>
+      <div class="brand-title">方块战场</div>
+      <div class="brand-sub">MINECRAFT WEB · 多人实时对抗</div>
+    </div>
+  </div>
+  <div class="scoreboard">
+    <div class="team-score red"><span class="dot"></span><span class="tname">赤焰</span><b id="score-red">0</b></div>
+    <div class="vs">VS</div>
+    <div class="team-score blue"><b id="score-blue">0</b><span class="tname">苍蓝</span><span class="dot"></span></div>
+  </div>
+  <div class="server-info">
+    <span id="conn-dot" class="conn-dot"></span>
+    <span id="conn-text">连接中</span>
+    <span class="sep">|</span>
+    在线 <b id="online-count">0</b>
+  </div>
+</header>
+
+<section id="player-hud" class="panel">
+  <div class="hud-head">
+    <div id="hud-avatar" class="avatar"></div>
+    <div>
+      <div id="hud-name" class="hud-name">未加入</div>
+      <div id="hud-team" class="tag">--</div>
+    </div>
+  </div>
+  <div class="hp-row"><span>生命</span><b id="hp-text">100 / 100</b></div>
+  <div class="bar"><div id="hp-bar" class="bar-fill hp"></div></div>
+  <div class="hud-stats">
+    <div><span>总积分</span><b id="stat-score">0</b></div>
+    <div><span>本局击杀</span><b id="stat-kills">0</b></div>
+    <div><span>本局阵亡</span><b id="stat-deaths">0</b></div>
+  </div>
+  <div id="crystal-red" class="hud-status"></div>
+  <div id="crystal-blue" class="hud-status"></div>
+  <div id="hud-status" class="hud-status"></div>
+  <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
+  <button id="wave-btn" class="view-btn">气功波 · Q</button>
+  <button id="recall-btn" class="view-btn">回城 · H</button>
+  <button id="gun-btn" class="view-btn">连射枪 · 5 · 30/30</button>
+  <button id="rocket-btn" class="view-btn">火箭筒 · 4</button>
+  <button id="beam-btn" class="view-btn">龟派气功 · 3</button>
+  <button id="weapon-toggle" class="view-btn">武器：剑 · 2 换弓</button>
+  <button id="invert-look" class="view-btn sub">水平视角：正常 · 点此反转</button>
+</section>
+
+<aside id="side-panel" class="panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="rank">排行榜</button>
+    <button class="tab" data-tab="history">战报</button>
+    <button class="tab" data-tab="help">玩法</button>
+  </div>
+  <div id="tab-rank" class="tab-body active"></div>
+  <div id="tab-history" class="tab-body"></div>
+  <div id="tab-help" class="tab-body">
+    <div class="help-title">怎么玩</div>
+    <ul class="help-list">
+      <li><b>H</b> 原地回城，需 3 秒，成功后冷却 30 秒。移动、攻击或受伤会打断。</li>
+      <li>攻击场地炸弹可引爆。打碎敌方水晶后，其基地暂停回血 30 秒。</li>
+      <li><b>W A S D</b> 移动，<b>Shift</b> 冲刺，<b>空格</b> 跳跃</li>
+      <li><b>1</b> 持剑，<b>2</b> 持弓，<b>3</b> 选龟派气功。龟派气功长按左键 1 秒，松手释放。剑用<b>左键</b>挥砍。弓用<b>左键按住蓄力、松开发射</b>，蓄力越久射程和伤害越高</li>
+      <li><b>V</b> 在<b>第三人称</b>与<b>第一人称</b>间切换；第一人称点击画面锁定鼠标环视，或按住右键拖动，Esc 释放</li>
+      <li>第三人称按屏幕方向移动；第一人称按<b>视角朝向</b>移动（W 前进、A/D 平移）</li>
+      <li>同阵营无法互相伤害；击杀 <b>+100 分</b>，阵亡 <b>-20 分</b></li>
+      <li>站进发光的<b>回血池</b>快速回血，回<b>自己老家</b>回血更快</li>
+      <li>血量归零后 <b>5 秒</b> 在自家营地满血复活，复活后有 1.5 秒无敌</li>
+      <li>滚轮缩放第三人称视角，<b>Enter</b> 打开聊天</li>
+    </ul>
+    <div class="help-title">积分与战绩</div>
+    <p class="help-p">所有得分、击杀、阵亡与战斗记录都保存在服务端 SQLite（data/mc.db），重连用同一个名字即可继续累计。</p>
+  </div>
+</aside>
+
+<div id="minimap-wrap" class="panel">
+  <div class="mini-head"><span>地图</span><span id="mini-pos">0, 0</span></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div class="mini-legend"><span class="l-red">■ 赤焰老家</span><span class="l-blue">■ 苍蓝老家</span><span class="l-pool">● 回血池</span></div>
+</div>
+
+<div id="kill-banner"></div>
+<div id="event-log"></div>
+
+<div id="bottom-tip">
+  <span><kbd>WASD</kbd> 移动</span>
+  <span><kbd>左键</kbd> 攻击 <kbd>1</kbd> 剑 <kbd>2</kbd> 弓</span>
+  <span><kbd>Shift</kbd> 冲刺</span>
+  <span><kbd>V</kbd> 视角</span>
+  <span><kbd>Enter</kbd> 聊天</span>
+</div>
+
+<div id="chat-box" class="hidden">
+  <span class="chat-prefix">全体</span>
+  <input id="chat-input" maxlength="100" placeholder="说点什么…（回车发送 / Esc 取消）" autocomplete="off">
+</div>
+
+<div id="death-overlay" class="hidden">
+  <div class="death-card">
+    <div class="death-title">你已倒下</div>
+    <div class="death-sub">正在返回老家复活…</div>
+    <div class="death-count"><b id="death-seconds">5.0</b><span>秒</span></div>
+    <div class="death-bar"><div id="death-bar-fill"></div></div>
+  </div>
+</div>
+
+<div id="login">
+  <div class="login-card">
+    <div class="login-cube"></div>
+    <h1>方块战场</h1>
+    <p class="login-sub">基于 Tornado + WebSocket 的多人体素对抗</p>
+    <label class="field-label" for="name-input">你的名字</label>
+    <input id="name-input" maxlength="14" placeholder="输入名字（用于保存积分）" autocomplete="off">
+    <label class="field-label">选择阵营（选自动会平衡人数）</label>
+    <div class="team-picker">
+      <button class="pick auto active" data-team="auto"><i></i>自动分配</button>
+      <button class="pick red" data-team="red"><i></i>赤焰营地</button>
+      <button class="pick blue" data-team="blue"><i></i>苍蓝营地</button>
+    </div>
+    <button id="join-btn" class="join-btn">进入世界</button>
+    <div id="login-msg" class="login-msg"></div>
+    <div class="login-foot">回血池争夺 · 击杀计分 · 5 秒回城复活 · 战绩存 SQLite</div>
+  </div>
+</div>
+
+<div id="offline" class="hidden">
+  <div class="offline-card">
+    <div class="offline-title">连接已断开</div>
+    <div id="offline-msg">正在重连…</div>
+  </div>
+</div>
+
+<script type="module" src="/static/main.js?v=15"></script>
+</body>
+</html>
