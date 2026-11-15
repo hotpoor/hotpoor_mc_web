@@ -484,13 +484,35 @@ function cancelDraw() {
 const WEAPON_NAMES = { sword: '宝剑', bow: '弓箭', beam: '龟派气功', rocket: '火箭筒',
   gun: '机关枪', axe: '斧子', mace: '狼牙棒', hammer: '重锤' };
 
+const weaponSlots = Object.entries(WEAPON_NAMES);
+const slotButtons = weaponSlots.map(([weapon, name], index) => {
+  const slot = document.createElement('button');
+  slot.type = 'button';
+  slot.className = 'view-btn';
+  slot.textContent = (index + 1) + ' · ' + name;
+  slot.disabled = true;
+  slot.onclick = () => equip(weapon);
+  $('weapon-slots').append(slot);
+  return slot;
+});
+
+function updateWeaponSlots(me) {
+  weaponSlots.forEach(([weapon, name], index) => {
+    const uses = me.weapons?.[weapon] || 0;
+    const slot = slotButtons[index];
+    slot.disabled = !uses;
+    slot.setAttribute('aria-pressed', String(weapon === G.weapon));
+    slot.textContent = (index + 1) + ' · ' + name + (uses ? ' · ' + uses : '');
+  });
+}
+
 function updateWeaponLabel() {
   $('weapon-toggle').textContent = G.weapon ? '武器 · ' + WEAPON_NAMES[G.weapon] : '武器 · 未装备';
 }
 
 function equip(weapon) {
   if (!G.me?.weapons?.[weapon]) {
-    if (G.world?.recipes?.[weapon]) log('到四角法阵组合拼音解锁' + WEAPON_NAMES[weapon], 'join');
+    if (G.world?.recipes?.[weapon]) log('拾取或到法阵合成' + WEAPON_NAMES[weapon], 'join');
     return;
   }
   if (weapon !== G.weapon) {
@@ -715,6 +737,7 @@ function updateHud() {
   $('wave-btn').textContent = me.waveCd > 0 ? '气功波 · ' + Math.ceil(me.waveCd) + ' 秒' : '气功波 · Q';
   const charge = G.weapon === 'beam' && me.draw != null ? ' · 蓄力 ' + Math.floor(me.draw * 100) + '%' : '';
   updateForge(me);
+  updateWeaponSlots(me);
   const uses = me.weapons?.[G.weapon];
   $('weapon-life').textContent = uses === -1 ? '剩余次数 · 无限' : uses != null ? '剩余次数 · ' + uses : '';
   $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';

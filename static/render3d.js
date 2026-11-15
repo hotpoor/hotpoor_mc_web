@@ -749,10 +749,12 @@ export class Renderer3D {
           const model = obj.weapon === 'beam'
             ? new THREE.Mesh(new THREE.OctahedronGeometry(.28), new THREE.MeshBasicMaterial({ color: 0x66ddff }))
             : makeWeapon(obj.weapon);
-          model.position.y = .8;
+          model.position.y = .9;
+          model.scale.setScalar(1.45);
+          if (obj.weapon !== 'beam') model.rotation.z = -.18;
           mesh.add(model);
           const label = labelSprite(obj.text + ' · E', '#ffe78b', 320, 100, 40);
-          label.position.y = 2;
+          label.position.y = 2.25;
           label.scale.set(2.4, .75, 1);
           label.material.depthTest = true;
           mesh.add(label);
