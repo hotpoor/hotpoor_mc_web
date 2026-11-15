@@ -53,6 +53,16 @@ export function makeWeapon(kind, overlay = false) {
     part(.16, .65, .10, 0x3a9e9d, 0, .45);
     part(.085, .60, .102, 0xaaf4df, .022, .47);
     part(.095, .09, .10, 0x8df1d9, .025, .81);
+  } else if (kind === 'mace') {
+    part(.10, .69, .10, 0x704a30, 0, .19);
+    part(.26, .43, .26, 0x4c4e54, 0, .59);
+    part(.17, .10, .17, 0x696d72, 0, .84);
+    for (const y of [.48, .68]) {
+      for (const sign of [-1, 1]) {
+        part(.14, .085, .085, 0xaab0b4, sign * .17, y);
+        part(.085, .085, .14, 0xaab0b4, 0, y, sign * .17);
+      }
+    }
   } else if (kind === 'axe') {
     part(.095, .81, .10, 0x754c2c, 0, .22);
     part(.22, .18, .13, 0x497d80, .08, .55);
