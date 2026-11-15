@@ -369,14 +369,19 @@ class Game:
         if not player.alive or player.recall_until or player.jump > 1.2:
             return
 
-        def nearby(obj):
-            return (math.hypot(player.x - obj["x"], player.z - obj["z"]) <= 2
+        def nearby(obj, reach=2):
+            return (math.hypot(player.x - obj["x"], player.z - obj["z"]) <= reach
                     and not self.blocked(player.x, player.z, obj["x"], obj["z"]))
 
         if player.carries_crystal:
             crystal = next(obj for obj in self.objects if obj["id"] == player.team)
-            if 0 < crystal["hp"] < crystal["max_hp"] and nearby(crystal):
-                crystal["hp"] = min(crystal["max_hp"], crystal["hp"] + 100)
+            if 0 < crystal["hp"] < crystal["max_hp"] and nearby(crystal, 5):
+                amount = min(100, crystal["max_hp"] - crystal["hp"])
+                crystal["hp"] += amount
+                self.emit({"k": "crystal_repair", "id": player.id, "amount": amount,
+                           "start": [player.x, player.jump + 1.1, player.z],
+                           "end": [crystal["x"], 1.4, crystal["z"]],
+                           "hp": crystal["hp"], "max_hp": crystal["max_hp"]})
                 player.carries_crystal = False
             return
         available = [obj for obj in self.objects if obj["kind"] == "ore" and obj["hp"] and nearby(obj)]

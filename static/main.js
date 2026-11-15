@@ -241,6 +241,10 @@ function handleEvent(ev) {
     case 'arrow':
       G.renderer?.spawnArrow?.(ev);
       break;
+    case 'crystal_repair':
+      G.renderer?.spawnRepair?.(ev);
+      if (ev.id === G.id) log('水晶修复 +' + ev.amount + ' · ' + ev.hp + '/' + ev.max_hp, 'join');
+      break;
     case 'crystal':
       log(G.world.teams[ev.team].name + '水晶被打碎，基地回血暂停 30 秒', 'join');
       break;

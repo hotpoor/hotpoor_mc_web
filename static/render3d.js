@@ -61,6 +61,7 @@ export class Renderer3D {
     this.swingSelf = 0;
     this.arrows = new Map();
     this.waves = [];
+    this.repairs = [];
     this.objectives = new Map();
     this.recallEffects = new Map();
     this.bowKick = 0;
@@ -658,6 +659,27 @@ export class Renderer3D {
       wave.mesh.material.dispose();
       return false;
     });
+    this.repairs = this.repairs.filter(effect => {
+      effect.age += dt;
+      const travel = Math.min(1, effect.age / .38);
+      effect.orb.position.lerpVectors(effect.start, effect.end, travel);
+      effect.orb.position.y += Math.sin(travel * Math.PI) * .65;
+      effect.orb.visible = travel < 1;
+      const pulse = Math.max(0, (effect.age - .38) / .9);
+      effect.ring.visible = effect.label.visible = travel === 1;
+      effect.ring.scale.setScalar(.45 + pulse * 2.2);
+      effect.ring.material.opacity = Math.max(0, 1 - pulse);
+      effect.label.position.y = 2.85 + pulse * .65;
+      effect.label.material.opacity = Math.min(1, Math.max(0, (1 - pulse) * 2));
+      if (pulse < 1) return true;
+      for (const mesh of [effect.orb, effect.ring, effect.label]) {
+        this.scene.remove(mesh);
+        if (mesh !== effect.label) mesh.geometry.dispose();
+        mesh.material.map?.dispose();
+        mesh.material.dispose();
+      }
+      return false;
+    });
     this.swingSelf = Math.max(0, this.swingSelf - dt);
     this.bowKick = Math.max(0, this.bowKick - dt);
     if (this.viewModel.visible) {
@@ -725,6 +747,23 @@ export class Renderer3D {
         }
       }
     }
+  }
+
+  spawnRepair(event) {
+    const start = new THREE.Vector3().fromArray(event.start);
+    const end = new THREE.Vector3().fromArray(event.end);
+    const orb = new THREE.Mesh(new THREE.OctahedronGeometry(.23), new THREE.MeshBasicMaterial({ color: 0x60ffda }));
+    orb.position.copy(start);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 40),
+      new THREE.MeshBasicMaterial({ color: 0x60ffda, side: THREE.DoubleSide, transparent: true, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(end.x, .06, end.z);
+    const label = labelSprite('+' + event.amount, '#60ffda', 192, 80, 48);
+    label.position.set(end.x, 2.85, end.z);
+    label.scale.set(1.65, .69, 1);
+    ring.visible = label.visible = false;
+    this.scene.add(orb, ring, label);
+    this.repairs.push({ start, end, orb, ring, label, age: 0 });
   }
 
   spawnWave(event) {
