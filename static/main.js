@@ -196,7 +196,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -297,6 +297,7 @@ window.addEventListener('keydown', e => {
     equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace' }[k]);
     return;
   }
+  if (k === 'e' && !e.repeat) { e.preventDefault(); interactCrystal(); return; }
   if (k === 'h' && !e.repeat) { e.preventDefault(); recallHome(); return; }
   if (k === 'q' && !e.repeat) { castWave(); return; }
   if (k === 'v') { toggleView(); e.preventDefault(); return; }
@@ -428,6 +429,12 @@ $('skin-toggle').addEventListener('click', () => {
 $('mace-btn').addEventListener('click', () => { if (G.joined) equip('mace'); });
 $('axe-btn').addEventListener('click', () => { if (G.joined) equip('axe'); });
 $('gun-btn').addEventListener('click', () => { if (G.joined) equip('gun'); });
+
+function interactCrystal() {
+  if (G.me?.alive && !G.chatOpen) send({ t: 'interact' });
+}
+
+$('collect-btn').addEventListener('click', interactCrystal);
 
 function recallHome() {
   if (!G.me?.alive || G.me.recall || G.me.recallCd || G.chatOpen) return;
@@ -637,6 +644,8 @@ function updateHud() {
   $('stat-deaths').textContent = me.deaths ?? 0;
   $('wave-btn').textContent = me.waveCd > 0 ? '气功波 · ' + Math.ceil(me.waveCd) + ' 秒' : '气功波 · Q';
   const charge = G.weapon === 'beam' && me.draw != null ? ' · 蓄力 ' + Math.floor(me.draw * 100) + '%' : '';
+  $('collect-btn').textContent = me.carriesCrystal ? '携带 1 颗 · E 修复己方水晶' : '采集水晶 · E';
+  $('collect-btn').disabled = !me.alive || !!me.recall;
   $('recall-btn').textContent = me.recall ? '回城中 · ' + me.recall.toFixed(1) + ' 秒'
     : me.recallCd ? '回城 · ' + me.recallCd + ' 秒' : '回城 · H';
   $('recall-btn').disabled = !me.alive || !!me.recall || !!me.recallCd;

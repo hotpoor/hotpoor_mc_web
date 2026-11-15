@@ -60,6 +60,7 @@ class Player:
     last_attack: float = 0.0
     weapon: str = "sword"
     skin: str = "steve"
+    carries_crystal: bool = False
     draw_started: float | None = None
     jump: float = 0.0
     jump_speed: float = 0.0
@@ -119,6 +120,10 @@ class Game:
                 self.objects.append({"id": f"bomb-{x}-{z}", "kind": "bomb", "x": x, "z": z,
                                      "hp": 1, "max_hp": 1, "ready": 0})
 
+        for x, z in ((-12, -6), (-12, 6), (12, -6), (12, 6), (0, -13), (0, 13)):
+            if not collides(x, z, self.blocks):
+                self.objects.append({"id": f"ore-{x}-{z}", "kind": "ore", "x": x, "z": z,
+                                     "hp": 1, "max_hp": 1, "ready": 0})
         self.arrows = {}
         self.next_arrow_id = 0
         self.players = {}                 # id -> Player
@@ -225,6 +230,9 @@ class Game:
         if not p:
             return
         now = time.monotonic()
+        if kind == "interact":
+            self.interact(p, now)
+            return
         if kind == "skin":
             skin = data.get("skin")
             if skin in SKIN_NAMES:
@@ -357,8 +365,29 @@ class Game:
                 break
         self.emit({"k": "attack", "id": p.id, "yaw": yaw, "hits": hits})
 
+    def interact(self, player, now):
+        if not player.alive or player.recall_until or player.jump > 1.2:
+            return
+
+        def nearby(obj):
+            return (math.hypot(player.x - obj["x"], player.z - obj["z"]) <= 2
+                    and not self.blocked(player.x, player.z, obj["x"], obj["z"]))
+
+        if player.carries_crystal:
+            crystal = next(obj for obj in self.objects if obj["id"] == player.team)
+            if 0 < crystal["hp"] < crystal["max_hp"] and nearby(crystal):
+                crystal["hp"] = min(crystal["max_hp"], crystal["hp"] + 100)
+                player.carries_crystal = False
+            return
+        available = [obj for obj in self.objects if obj["kind"] == "ore" and obj["hp"] and nearby(obj)]
+        ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
+        if ore:
+            ore["hp"] = 0
+            ore["ready"] = now + 10
+            player.carries_crystal = True
+
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj.get("team") != player.team]
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] != "ore" and obj.get("team") != player.team]
 
     @staticmethod
     def object_bounds(obj):
@@ -687,7 +716,7 @@ class Game:
                 "id": p.id, "name": p.name, "team": p.team,
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
-                "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "jump": round(p.jump, 3),
+                "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "carries_crystal": p.carries_crystal, "jump": round(p.jump, 3),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
                 "beam_cd": round(max(0, p.beam_ready - now), 1),
                 "rocket_cd": round(max(0, p.rocket_ready - now), 1),
