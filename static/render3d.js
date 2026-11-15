@@ -679,6 +679,17 @@ export class Renderer3D {
           gem.position.y = 1.1;
           gem.scale.y = 1.35;
           mesh.add(gem, box(1.1, .24, 1.1, 0x3b3849, .12));
+          const canvas = document.createElement('canvas');
+          canvas.width = 192;
+          canvas.height = 32;
+          const map = new THREE.CanvasTexture(canvas);
+          map.colorSpace = THREE.SRGBColorSpace;
+          const bar = new THREE.Sprite(new THREE.SpriteMaterial({ map, depthWrite: false }));
+          bar.position.y = 2.32;
+          bar.scale.set(2.4, .4, 1);
+          mesh.add(bar);
+          mesh.userData.healthBar = { canvas, map };
+
         } else {
           mesh.add(box(.85, .85, .85, 0xb8372e, .43),
             box(.87, .22, .87, 0xf1dcb1, .43), box(.09, .23, .09, 0xffaf38, .95));
@@ -688,7 +699,24 @@ export class Renderer3D {
         this.objectives.set(obj.id, mesh);
       }
       mesh.visible = obj.hp > 0;
-      if (obj.kind === 'crystal') mesh.children[0].rotation.y = this.time * 1.3;
+      if (obj.kind === 'crystal') {
+        mesh.children[0].rotation.y = this.time * 1.3;
+        const bar = mesh.userData.healthBar;
+        if (bar.hp !== obj.hp) {
+          const ctx = bar.canvas.getContext('2d');
+          ctx.fillStyle = '#171b28';
+          ctx.fillRect(0, 0, 192, 32);
+          ctx.fillStyle = this.world.teams[obj.team].color;
+          ctx.fillRect(3, 3, 186 * obj.hp / obj.max_hp, 26);
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.fillText(obj.hp + ' / ' + obj.max_hp, 96, 17);
+          bar.map.needsUpdate = true;
+          bar.hp = obj.hp;
+        }
+      }
     }
   }
 
