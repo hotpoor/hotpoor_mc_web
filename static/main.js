@@ -224,7 +224,7 @@ function applyState(s) {
     const crystal = objects.find(obj => obj.id === team);
     if (crystal) $('crystal-' + team).textContent = crystal.hp
       ? G.world.teams[team].short + '水晶 ' + crystal.hp + '/' + crystal.max_hp
-      : G.world.teams[team].short + '基地回血暂停 ' + crystal.cooldown + ' 秒';
+      : G.world.teams[team].short + '基地与泉水回血暂停 ' + crystal.cooldown + ' 秒';
   }
   for (const ev of (s.events || [])) handleEvent(ev);
   G.renderer?.syncArrows?.(s.arrows || []);
@@ -246,7 +246,7 @@ function handleEvent(ev) {
       if (ev.id === G.id) log('水晶修复 +' + ev.amount + ' · ' + ev.hp + '/' + ev.max_hp, 'join');
       break;
     case 'crystal':
-      log(G.world.teams[ev.team].name + '水晶被打碎，基地回血暂停 30 秒', 'join');
+      log(G.world.teams[ev.team].name + '水晶被打碎，基地与泉水回血暂停 30 秒', 'join');
       break;
     case 'bomb':
       G.renderer?.spawnWave?.({ start: [ev.x, .65, ev.z], end: [ev.x, .65, ev.z], blast: true });

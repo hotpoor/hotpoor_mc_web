@@ -685,6 +685,7 @@ class Game:
         for obj in self.objects:
             if not obj["hp"] and obj["ready"] is not None and now >= obj["ready"]:
                 obj["hp"] = obj["max_hp"]
+        active_crystals = {obj["team"] for obj in self.objects if obj["kind"] == "crystal" and obj["hp"] > 0}
         previous = {p.id: (p.x, p.z) for p in self.players.values() if p.alive}
         for p in list(self.players.values()):
             if not p.alive:
@@ -712,11 +713,12 @@ class Game:
             rate = 0.0
             pool = pool_at(p.x, p.z, self.pools)
             p.pool_name = pool["name"] if pool else ""
-            if pool:
+            crystal_active = p.team in active_crystals
+            if pool and crystal_active:
                 rate = float(pool["power"])
-            if in_own_base(p.x, p.z, p.team) and any(obj["id"] == p.team and obj["hp"] for obj in self.objects):
+            if in_own_base(p.x, p.z, p.team) and crystal_active:
                 rate = max(rate, RULES["base_heal"])
-            if now - p.last_damage_at > RULES["idle_regen_delay"]:
+            if (crystal_active or not pool) and now - p.last_damage_at > RULES["idle_regen_delay"]:
                 rate = max(rate, RULES["idle_regen"])
             p.heal_rate = rate
             if rate and p.hp < MAX_HP:
