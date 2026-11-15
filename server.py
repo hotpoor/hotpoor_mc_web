@@ -116,7 +116,7 @@ def make_app(game, db):
         game.world["client_build"] = match[1]
     return tornado.web.Application(
         [
-            (r"/", tornado.web.RedirectHandler, {"url": "/static/index.html"}),
+            (r"/", tornado.web.RedirectHandler, {"url": "static/index.html"}),
             (r"/api/leaderboard", LeaderboardHandler),
             (r"/api/history", HistoryHandler),
             (r"/api/stats", StatsHandler),
@@ -137,7 +137,7 @@ def make_app(game, db):
 
 def main():
     parse_command_line()
-    db_path = options.db
+    db_path = os.environ.get("MC_DATABASE_URL") or options.db
     db = Database(db_path)
     ioloop = tornado.ioloop.IOLoop.current()
     game = Game(db)
@@ -145,7 +145,7 @@ def main():
     app.listen(options.port, address=options.host)
     game.start()
     print("mc-web server up: http://localhost:%d" % options.port)
-    print("database: %s" % db_path)
+    print("database: %s" % ("PostgreSQL" if os.environ.get("MC_DATABASE_URL") else options.db))
     print("world blocks: %d | tick: 20 Hz | ws: /ws" % len(game.blocks))
     ioloop.start()
 

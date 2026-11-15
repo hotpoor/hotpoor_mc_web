@@ -31,3 +31,10 @@ python smoke_test.py
 测试使用临时数据库，并启动两个 WebSocket 客户端验证联机。
 
 内置 Three.js r160 采用 MIT 许可证，许可文本见 [Three.js LICENSE](static/vendor/THREE-LICENSE.txt)。
+
+## 云端部署
+
+线上入口为 https://api.xialiwei.com/hotpoor/mc-web/ 。反向代理剥离
+`/hotpoor/mc-web/` 前缀，并在同前缀下转发 WebSocket `ws`。
+安装 `psycopg[binary]` 并在服务端设置 `MC_DATABASE_URL` 可使用 PostgreSQL。
+未设置时默认使用本机 SQLite。

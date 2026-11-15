@@ -1,5 +1,6 @@
 // mc-web client: networking, input, prediction, HUD and panels.
-const BUILD = document.querySelector('script[src*="/static/main.js"]').src.split('?v=')[1];
+const BUILD = new URL(import.meta.url).searchParams.get('v');
+const ROOT = new URL('../', import.meta.url);
 console.info('[mc-web] client build', BUILD);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
@@ -36,7 +37,7 @@ let updating = false;
 async function checkUpdate() {
   if (updating) return;
   try {
-    const response = await fetch('/static/index.html', { cache: 'no-store' });
+    const response = await fetch(new URL('static/index.html', ROOT), { cache: 'no-store' });
     if (!response.ok) return;
     const version = (await response.text()).match(/main\.js\?v=([0-9]+)/)?.[1];
     if (!version || Number(version) <= Number(BUILD) || updating) return;
@@ -54,7 +55,7 @@ window.addEventListener('focus', checkUpdate);
 function connect() {
   clearTimeout(G.reconnectTimer);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  const ws = new WebSocket(`${proto}://${ROOT.host}${ROOT.pathname}ws`);
   G.ws = ws;
   setConn(false, '连接中');
   ws.onopen = () => {
@@ -683,8 +684,8 @@ function drawMinimap() {
 async function refreshData() {
   try {
     const [lb, hs] = await Promise.all([
-      fetch('/api/leaderboard?limit=20').then(r => r.json()),
-      fetch('/api/history?limit=40').then(r => r.json()),
+      fetch(new URL('api/leaderboard?limit=20', ROOT)).then(r => r.json()),
+      fetch(new URL('api/history?limit=40', ROOT)).then(r => r.json()),
     ]);
     renderRank(lb.players || []);
     renderHistory(hs.history || []);
