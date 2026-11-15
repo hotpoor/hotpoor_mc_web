@@ -718,8 +718,6 @@ class Game:
                 rate = float(pool["power"])
             if in_own_base(p.x, p.z, p.team) and crystal_active:
                 rate = max(rate, RULES["base_heal"])
-            if (crystal_active or not pool) and now - p.last_damage_at > RULES["idle_regen_delay"]:
-                rate = max(rate, RULES["idle_regen"])
             p.heal_rate = rate
             if rate and p.hp < MAX_HP:
                 p.hp = min(MAX_HP, p.hp + rate * dt)
