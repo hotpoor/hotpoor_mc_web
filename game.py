@@ -90,7 +90,7 @@ RECIPES = {
     "sword": ("bǎo", "jiàn", 50),
     "bow": ("gōng", "jiàn", 50),
     "beam": ("guī", "pài", -1),
-    "rocket": ("huǒ", "jiàn", -1),
+    "rocket": ("huǒ", "jiàn", "tǒng", -1),
     "gun": ("jī", "qiāng", 50),
     "axe": ("zhàn", "fǔ", 30),
     "mace": ("láng", "yá", 20),
@@ -101,7 +101,7 @@ PINYIN = {
     "bǎo": ("宝", "b", "ǎo"), "jiàn": ("剑 / 箭", "j", "iàn"),
     "gōng": ("弓", "g", "ōng"), "guī": ("龟", "g", "uī"),
     "pài": ("派", "p", "ài"), "huǒ": ("火", "h", "uǒ"),
-    "jī": ("机", "j", "ī"), "qiāng": ("枪", "q", "iāng"),
+    "tǒng": ("筒", "t", "ǒng"), "jī": ("机", "j", "ī"), "qiāng": ("枪", "q", "iāng"),
     "zhàn": ("战", "zh", "àn"), "fǔ": ("斧", "f", "ǔ"),
     "láng": ("狼", "l", "áng"), "yá": ("牙", "y", "á"),
     "zhòng": ("重", "zh", "òng"), "chuí": ("锤", "ch", "uí"),
@@ -178,7 +178,7 @@ class Game:
         self.world["materials"] = MATERIALS
         self.world["recipes"] = {
             weapon: {
-                "word": ("火箭" if weapon == "rocket" else "宝剑") if weapon in ("rocket", "sword")
+                "word": ("火箭筒" if weapon == "rocket" else "宝剑") if weapon in ("rocket", "sword")
                         else "".join(PINYIN[sound][0].split(" / ")[-1] for sound in sounds),
                 "whole": recipe_materials(sounds, False), "split": recipe_materials(sounds, True),
                 "uses": uses,
