@@ -4,7 +4,7 @@ import * as THREE from './vendor/three.module.js';
 
 import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=18';
 
-import { makeSkin } from './player-skins.js?v=16';
+import { makeSkin, SKIN_NAMES } from './player-skins.js?v=22';
 
 const TEAM_HEX = { red: 0xef4f4f, blue: 0x4c86f0 };
 const ARC = Math.PI * 65 / 180;
@@ -88,7 +88,7 @@ export class Renderer3D {
       ['grass', 'dirt', 'grassSide', 'stone', 'brick', 'bark', 'rings', 'leaves']
         .map(kind => [kind, voxelMaterial(kind)]),
     );
-    this.skins = { steve: makeSkin('steve'), alex: makeSkin('alex') };
+    this.skins = Object.fromEntries(Object.keys(SKIN_NAMES).map(name => [name, makeSkin(name)]));
     this.buildViewModel();
     this.buildGround();
     this.buildWalls();

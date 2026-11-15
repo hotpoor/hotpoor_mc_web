@@ -235,3 +235,36 @@ body.first-person #view { cursor: crosshair; }
   .server-info, .brand { min-width: 0; }
   #minimap-wrap { transform: scale(.8); transform-origin: bottom right; }
 }
+
+.skin-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+  gap: 5px;
+  margin: 6px 0 10px;
+}
+
+.skin-list.hidden { display: none; }
+
+.skin-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border: 1px solid #59604e;
+  border-radius: 6px;
+  padding: 6px 2px;
+  background: #20281f;
+  color: #f5f5ee;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.skin-card[aria-pressed="true"] {
+  border-color: #eac76d;
+  background: #414932;
+}
+
+.skin-card canvas {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}

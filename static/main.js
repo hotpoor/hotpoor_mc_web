@@ -1,3 +1,5 @@
+import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=22';
+
 // mc-web client: networking, input, prediction, HUD and panels.
 const BUILD = new URL(import.meta.url).searchParams.get('v');
 const ROOT = new URL('../', import.meta.url);
@@ -391,17 +393,36 @@ function fireGun() {
 }
 
 function updateSkinButton() {
-  $('skin-toggle').textContent = '皮肤 · ' + (G.skin === 'alex' ? '艾利克斯' : '史蒂夫');
+  $('skin-toggle').textContent = '皮肤 · ' + SKIN_NAMES[G.skin];
+  for (const button of document.querySelectorAll('[data-skin]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.skin === G.skin));
+  }
+}
+
+function setupSkinList(list) {
+  for (const [skin, label] of Object.entries(SKIN_NAMES)) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'skin-card';
+    button.dataset.skin = skin;
+    const portrait = document.createElement('canvas');
+    portrait.setAttribute('aria-hidden', 'true');
+    drawSkinFace(portrait, skin);
+    button.append(portrait, label);
+    button.addEventListener('click', () => {
+      G.skin = skin;
+      localStorage.setItem('mc.skin', skin);
+      if (G.me) G.me.skin = skin;
+      updateSkinButton();
+      if (G.joined) send({ t: 'skin', skin });
+    });
+    list.append(button);
+  }
 }
 
 $('skin-toggle').addEventListener('click', () => {
-  if (!G.joined) return;
-  G.skin = G.skin === 'alex' ? 'steve' : 'alex';
-  localStorage.setItem('mc.skin', G.skin);
-  $('skin-select').value = G.skin;
-  if (G.me) G.me.skin = G.skin;
-  updateSkinButton();
-  send({ t: 'skin', skin: G.skin });
+  const hidden = $('game-skins').classList.toggle('hidden');
+  $('skin-toggle').setAttribute('aria-expanded', String(!hidden));
 });
 
 $('mace-btn').addEventListener('click', () => { if (G.joined) equip('mace'); });
@@ -732,8 +753,6 @@ document.querySelectorAll('.pick').forEach(btn => {
   });
 });
 $('join-btn').addEventListener('click', () => {
-  G.skin = $('skin-select').value;
-  localStorage.setItem('mc.skin', G.skin);
   G.name = $('name-input').value.trim() || randomName();
   localStorage.setItem('mc_name', G.name);
   $('join-btn').disabled = true;
@@ -770,7 +789,11 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-$('skin-select').value = localStorage.getItem('mc.skin') === 'alex' ? 'alex' : 'steve';
+const savedSkin = localStorage.getItem('mc.skin');
+if (Object.hasOwn(SKIN_NAMES, savedSkin)) G.skin = savedSkin;
+setupSkinList($('login-skins'));
+setupSkinList($('game-skins'));
+updateSkinButton();
 const query = new URLSearchParams(location.search);
 $('name-input').value = query.get('name') || localStorage.getItem('mc_name') || randomName();
 if (['red', 'blue'].includes(query.get('team'))) {

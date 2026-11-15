@@ -81,6 +81,7 @@ class Player:
 
 
 ARROW_GRAVITY = 18.0
+SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot")
 
 
 def segment_box(start, delta, bounds):
@@ -177,7 +178,7 @@ class Game:
         now = time.monotonic()
         p = Player(
             id=pid, name=name, team=team, ws=ws,
-            skin="alex" if skin == "alex" else "steve",
+            skin=skin if skin in SKIN_NAMES else "steve",
             x=spawn[0] + random.uniform(-1.4, 1.4),
             z=spawn[1] + random.uniform(-2.4, 2.4),
             yaw=0.0 if team == "red" else math.pi,
@@ -226,7 +227,7 @@ class Game:
         now = time.monotonic()
         if kind == "skin":
             skin = data.get("skin")
-            if skin in ("steve", "alex"):
+            if skin in SKIN_NAMES:
                 p.skin = skin
             return
         if kind == "recall":

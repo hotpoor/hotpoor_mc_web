@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=4">
+<link rel="stylesheet" href="./style.css?v=22">
 </head>
 <body>
 
@@ -60,7 +60,8 @@
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
   <button id="wave-btn" class="view-btn">气功波 · Q</button>
   <button id="recall-btn" class="view-btn">回城 · H</button>
-  <button id="skin-toggle" class="view-btn">皮肤 · 史蒂夫</button>
+  <button id="skin-toggle" class="view-btn" aria-controls="game-skins" aria-expanded="false">皮肤 · 史蒂夫</button>
+  <div id="game-skins" class="skin-list hidden" role="group" aria-label="切换人物皮肤"></div>
   <button id="mace-btn" class="view-btn">狼牙棒 · 7</button>
   <button id="axe-btn" class="view-btn">斧子 · 6</button>
   <button id="gun-btn" class="view-btn">连射枪 · 5 · 30/30</button>
@@ -141,11 +142,8 @@
       <button class="pick red" data-team="red"><i></i>赤焰营地</button>
       <button class="pick blue" data-team="blue"><i></i>苍蓝营地</button>
     </div>
-    <label class="field-label" for="skin-select">人物皮肤</label>
-    <select id="skin-select" class="view-btn">
-      <option value="steve">史蒂夫</option>
-      <option value="alex">艾利克斯</option>
-    </select>
+    <div class="field-label">人物皮肤</div>
+    <div id="login-skins" class="skin-list" role="group" aria-label="选择人物皮肤"></div>
     <button id="join-btn" class="join-btn">进入世界</button>
     <div id="login-msg" class="login-msg"></div>
     <div class="login-foot">回血池争夺 · 击杀计分 · 5 秒回城复活 · 战绩存 SQLite</div>
@@ -159,6 +157,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=21"></script>
+<script type="module" src="./main.js?v=22"></script>
 </body>
 </html>
