@@ -110,7 +110,7 @@ class Game:
         self.pools = self.world["pools"]
         self.objects = [
             {"id": team, "kind": "crystal", "team": team, "x": cfg["spawn"][0], "z": -4,
-             "hp": 100, "max_hp": 100, "ready": 0}
+             "hp": 500, "max_hp": 500, "ready": 0}
             for team, cfg in self.world["teams"].items()
         ]
         for x, z in ((-8, 0), (8, 0), (0, -8), (0, 8)):
