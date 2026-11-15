@@ -366,11 +366,12 @@ class Game:
         self.emit({"k": "attack", "id": p.id, "yaw": yaw, "hits": hits})
 
     def interact(self, player, now):
-        if not player.alive or player.recall_until or player.jump > 1.2:
+        if not player.alive or player.recall_until:
             return
 
         def nearby(obj, reach=2):
             return (math.hypot(player.x - obj["x"], player.z - obj["z"]) <= reach
+                    and abs(player.jump - obj.get("y", 0)) <= 1.2
                     and not self.blocked(player.x, player.z, obj["x"], obj["z"]))
 
         if player.carries_crystal:
@@ -383,16 +384,31 @@ class Game:
                            "end": [crystal["x"], 1.4, crystal["z"]],
                            "hp": crystal["hp"], "max_hp": crystal["max_hp"]})
                 player.carries_crystal = False
+            else:
+                self.drop_crystal(player, now)
             return
-        available = [obj for obj in self.objects if obj["kind"] == "ore" and obj["hp"] and nearby(obj)]
+        available = [obj for obj in self.objects if obj["kind"] in ("ore", "dropped_crystal") and obj["hp"] and nearby(obj)]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
-            ore["hp"] = 0
-            ore["ready"] = now + 10
+            if ore["kind"] == "dropped_crystal":
+                self.objects.remove(ore)
+            else:
+                ore["hp"] = 0
+                ore["ready"] = now + 10
             player.carries_crystal = True
 
+    def drop_crystal(self, player, now):
+        if not player.carries_crystal:
+            return
+        player.carries_crystal = False
+        floor = max((b["h"] for b in self.blocks if b["h"] <= player.jump
+                     and abs(player.x - b["x"]) < .5 and abs(player.z - b["z"]) < .5), default=0)
+        self.objects.append({"id": "drop-" + uuid.uuid4().hex, "kind": "dropped_crystal",
+                             "x": player.x, "y": floor, "z": player.z,
+                             "hp": 1, "max_hp": 1, "ready": 0, "expires": now + 60})
+
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] != "ore" and obj.get("team") != player.team]
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb") and obj.get("team") != player.team]
 
     @staticmethod
     def object_bounds(obj):
@@ -575,6 +591,7 @@ class Game:
             self.kill(attacker, victim, now)
 
     def kill(self, killer, victim, now):
+        self.drop_crystal(victim, now)
         victim.hp = 0
         victim.alive = False
         victim.jump = victim.jump_speed = 0.0
@@ -653,6 +670,7 @@ class Game:
         self.last_tick = now
         self.tick_no += 1
 
+        self.objects[:] = [obj for obj in self.objects if now < obj.get("expires", math.inf)]
         for obj in self.objects:
             if not obj["hp"] and now >= obj["ready"]:
                 obj["hp"] = obj["max_hp"]

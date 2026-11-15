@@ -690,6 +690,17 @@ export class Renderer3D {
   }
 
   syncObjectives(objects) {
+    const active = new Set(objects.map(obj => obj.id));
+    for (const [id, mesh] of this.objectives) {
+      if (active.has(id)) continue;
+      this.scene.remove(mesh);
+      for (const child of mesh.children) {
+        child.geometry?.dispose();
+        child.material.map?.dispose();
+        child.material.dispose();
+      }
+      this.objectives.delete(id);
+    }
     for (const obj of objects) {
       let mesh = this.objectives.get(obj.id);
       if (!mesh) {
@@ -712,22 +723,23 @@ export class Renderer3D {
           mesh.add(bar);
           mesh.userData.healthBar = { canvas, map };
 
-        } else if (obj.kind === 'ore') {
+        } else if (obj.kind === 'ore' || obj.kind === 'dropped_crystal') {
           const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.42),
             new THREE.MeshLambertMaterial({ color: 0x54ffee, emissive: 0x078c81, emissiveIntensity: .7 }));
           gem.position.y = .68;
           gem.scale.y = 1.35;
-          mesh.add(gem, box(.8, .13, .8, 0x2f5558, .07));
+          mesh.add(gem);
+          if (obj.kind === 'ore') mesh.add(box(.8, .13, .8, 0x2f5558, .07));
         } else {
           mesh.add(box(.85, .85, .85, 0xb8372e, .43),
             box(.87, .22, .87, 0xf1dcb1, .43), box(.09, .23, .09, 0xffaf38, .95));
         }
-        mesh.position.set(obj.x, 0, obj.z);
+        mesh.position.set(obj.x, obj.y || 0, obj.z);
         this.scene.add(mesh);
         this.objectives.set(obj.id, mesh);
       }
       mesh.visible = obj.hp > 0;
-      if (obj.kind === 'ore') mesh.children[0].rotation.y = this.time * 1.6;
+      if (obj.kind === 'ore' || obj.kind === 'dropped_crystal') mesh.children[0].rotation.y = this.time * 1.6;
       if (obj.kind === 'crystal') {
         mesh.children[0].rotation.y = this.time * 1.3;
         const bar = mesh.userData.healthBar;

@@ -648,7 +648,7 @@ function updateHud() {
   $('stat-deaths').textContent = me.deaths ?? 0;
   $('wave-btn').textContent = me.waveCd > 0 ? '气功波 · ' + Math.ceil(me.waveCd) + ' 秒' : '气功波 · Q';
   const charge = G.weapon === 'beam' && me.draw != null ? ' · 蓄力 ' + Math.floor(me.draw * 100) + '%' : '';
-  $('collect-btn').textContent = me.carriesCrystal ? '携带 1 颗 · E 修复己方水晶' : '采集水晶 · E';
+  $('collect-btn').textContent = me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
   $('recall-btn').textContent = me.recall ? '回城中 · ' + me.recall.toFixed(1) + ' 秒'
     : me.recallCd ? '回城 · ' + me.recallCd + ' 秒' : '回城 · H';
