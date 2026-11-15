@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS history (
     score_delta  INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS game_settings (name TEXT PRIMARY KEY, value TEXT NOT NULL);
+
 CREATE INDEX IF NOT EXISTS idx_history_ts ON history(id DESC);
 CREATE INDEX IF NOT EXISTS idx_players_score ON players(score DESC);
 """
@@ -72,6 +74,20 @@ class Database:
         with self._lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.executescript(SCHEMA)
+            self.conn.commit()
+
+    def get_setting(self, name):
+        with self._lock:
+            row = self.conn.execute("SELECT value FROM game_settings WHERE name = ?", (name,)).fetchone()
+            return row["value"] if row else None
+
+    def set_setting(self, name, value):
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO game_settings (name, value) VALUES (?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET value=excluded.value",
+                (name, value),
+            )
             self.conn.commit()
 
     def get_player(self, name):

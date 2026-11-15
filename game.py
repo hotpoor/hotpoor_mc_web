@@ -7,7 +7,10 @@ render interpolated snapshots. That keeps PvP fair even with a modified client.
 """
 
 import json
+import hashlib
+import hmac
 import math
+import os
 import random
 import re
 import time
@@ -60,7 +63,7 @@ class Player:
     last_attack: float = 0.0
     weapon: str = ""
     weapons: dict = field(default_factory=dict)
-    craft_modes: tuple = ("text", "whole", "split")
+    next_settings_attempt: float = 0.0
     syllable: str = ""
     syllables: list = field(default_factory=list)
     slam_pending: bool = False
@@ -149,6 +152,12 @@ def clean_name(raw):
 class Game:
     def __init__(self, db):
         self.db = db
+        self.settings_digest = os.environ.get("MC_SETTINGS_PASSWORD_SHA256", "")
+        self.craft_modes = ("text", "whole", "split")
+        if db and self.settings_digest:
+            saved = db.get_setting("craft_modes")
+            if saved is not None:
+                self.craft_modes = tuple(mode for mode in self.craft_modes if mode in saved.split(","))
         self.world = build_world()
         self.blocks = self.world["blocks"]
         self.pools = self.world["pools"]
@@ -308,9 +317,21 @@ class Game:
             self.interact(p, now)
             return
         if kind == "craft_modes":
+            if now < p.next_settings_attempt:
+                self.send(ws, {"t": "settings_result", "ok": False, "message": "请稍后再试"})
+                return
+            p.next_settings_attempt = now + 2
+            password = data.get("password")
             modes = data.get("modes")
-            if isinstance(modes, list):
-                p.craft_modes = tuple(mode for mode in ("text", "whole", "split") if mode in modes)
+            valid = isinstance(password, str) and len(password) <= 256 and isinstance(modes, list)
+            if (not valid or not self.settings_digest or not hmac.compare_digest(
+                    hashlib.sha256(password.encode("utf-8", errors="replace")).hexdigest(), self.settings_digest)):
+                self.send(ws, {"t": "settings_result", "ok": False, "message": "密码错误或全局设置未启用"})
+                return
+            selected = tuple(mode for mode in ("text", "whole", "split") if mode in modes)
+            self.db.set_setting("craft_modes", ",".join(selected))
+            self.craft_modes = selected
+            self.send(ws, {"t": "settings_result", "ok": True, "message": "全局设置已同步"})
             return
         if kind == "craft":
             self.craft(p, data.get("weapon"), data.get("mode"))
@@ -440,7 +461,7 @@ class Game:
                    for obj in self.objects)
 
     def craft(self, p, weapon, mode):
-        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in p.craft_modes
+        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in self.craft_modes
                 or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0) >= WEAPON_USES[mode]):
             return
         recipe = self.world["recipes"][weapon]
@@ -537,7 +558,7 @@ class Game:
             return
         available = [obj for obj in self.objects
                      if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
-                         or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in player.craft_modes)
+                         or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in self.craft_modes)
                          or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < WEAPON_USES["pickup"]))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
@@ -942,6 +963,7 @@ class Game:
             "arrows": [{"id": arrow_id, "position": arrow["position"], "velocity": arrow["velocity"], "rocket": arrow["rocket"]}
                        for arrow_id, arrow in self.arrows.items()],
             "team_score": self.team_score,
+            "craft_modes": self.craft_modes,
             "objects": [{**obj, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }

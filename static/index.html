@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=38">
+<link rel="stylesheet" href="./style.css?v=40">
 </head>
 <body>
 
@@ -64,10 +64,13 @@
   <button id="skin-toggle" class="view-btn" aria-controls="game-skins" aria-expanded="false">皮肤 · 史蒂夫</button>
   <div id="game-skins" class="skin-list hidden" role="group" aria-label="切换人物皮肤"></div>
   <fieldset id="craft-modes">
-    <legend>武器合成</legend>
+    <legend>全局武器合成</legend>
     <label><input type="checkbox" value="text" checked> 文字</label>
     <label><input type="checkbox" value="whole" checked> 拼音</label>
     <label><input type="checkbox" value="split" checked> 声母韵母</label>
+    <label class="craft-password">管理密码 <input id="craft-password" type="password" autocomplete="off" maxlength="256"></label>
+    <button id="craft-save" class="view-btn" type="button">应用全局设置</button>
+    <div id="craft-status" role="status"></div>
   </fieldset>
   <div id="weapon-slots" role="group" aria-label="数字键武器槽"></div>
   <div id="weapon-life" class="hud-status"></div>
@@ -174,6 +177,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=39"></script>
+<script type="module" src="./main.js?v=40"></script>
 </body>
 </html>

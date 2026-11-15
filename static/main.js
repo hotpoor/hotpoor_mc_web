@@ -71,6 +71,10 @@ function connect() {
     try { msg = JSON.parse(e.data); } catch (_) { return; }
     if (msg.t === 'welcome') onWelcome(msg);
     else if (msg.t === 'state') applyState(msg);
+    else if (msg.t === 'settings_result') {
+      $('craft-status').textContent = msg.message;
+      if (msg.ok) craftSettingsDirty = false;
+    }
   };
   ws.onclose = () => {
     G.drawStart = null;
@@ -95,7 +99,6 @@ function onWelcome(msg) {
   G.team = msg.team;
   G.world = msg.world;
   G.joined = true;
-  sendCraftModes();
   updateSkinButton();
   G.weapon = "";
   updateWeaponLabel();
@@ -233,6 +236,15 @@ function applyState(s) {
   $('online-count').textContent = G.online;
   $('score-red').textContent = G.teamScore.red || 0;
   $('score-blue').textContent = G.teamScore.blue || 0;
+  const modes = s.craft_modes;
+  if (Array.isArray(modes)) {
+    const changed = modes.join(',') !== globalCraftModes.join(',');
+    globalCraftModes = modes;
+    if (changed || !craftSettingsDirty) {
+      craftSettingsDirty = false;
+      for (const input of craftModeInputs) input.checked = modes.includes(input.value);
+    }
+  }
   const objects = s.objects || [];
   G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))));
   for (const team of ['red', 'blue']) {
@@ -306,7 +318,7 @@ function mapKey(key) {
 }
 
 window.addEventListener('keydown', e => {
-  if (e.isComposing || e.target === $('name-input') || !G.joined) return;
+  if (e.isComposing || (e.target instanceof HTMLInputElement) || !G.joined) return;
   const k = mapKey(e.key);
   if (k === 'enter') {
     e.preventDefault();
@@ -523,22 +535,26 @@ function equip(weapon) {
   }
 }
 
-const craftModeInputs = [...document.querySelectorAll('#craft-modes input')];
-for (const input of craftModeInputs) {
-  input.checked = localStorage.getItem('mc.craft.' + input.value) !== '0';
-  input.addEventListener('change', () => {
-    localStorage.setItem('mc.craft.' + input.value, input.checked ? '1' : '0');
-    sendCraftModes();
-    if (G.me) updateForge(G.me);
-  });
-}
+const craftModeInputs = [...document.querySelectorAll('#craft-modes input[type="checkbox"]')];
+let globalCraftModes = ['text', 'whole', 'split'];
+let craftSettingsDirty = false;
+for (const input of craftModeInputs) input.addEventListener('change', () => {
+  craftSettingsDirty = true;
+  $('craft-status').textContent = '输入管理密码后应用';
+});
+$('craft-save').addEventListener('click', () => {
+  const password = $('craft-password');
+  if (!G.connected || !password.value) {
+    $('craft-status').textContent = '连接游戏后输入管理密码';
+    return;
+  }
+  send({ t: 'craft_modes', password: password.value,
+    modes: craftModeInputs.filter(input => input.checked).map(input => input.value) });
+  password.value = '';
+});
 
 function enabledCraftModes() {
-  return craftModeInputs.filter(input => input.checked).map(input => input.value);
-}
-
-function sendCraftModes() {
-  send({ t: 'craft_modes', modes: enabledCraftModes() });
+  return globalCraftModes;
 }
 
 function materialMode(material) {

@@ -294,3 +294,6 @@ body.first-person #view { cursor: crosshair; }
 }
 #craft-modes label { white-space: nowrap; }
 #craft-modes input { vertical-align: middle; margin: 0 1px 0 0; }
+
+#craft-modes .craft-password { display: block; margin-top: 6px; }
+#craft-password { width: 62%; color: inherit; background: #232b23; border: 1px solid #59604e; }
