@@ -720,12 +720,20 @@ export class Renderer3D {
       if (!mesh) {
         const crystal = obj.kind === 'crystal';
         mesh = new THREE.Group();
-        if (crystal) {
-          const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.67),
-            new THREE.MeshLambertMaterial({ color: TEAM_HEX[obj.team], emissive: TEAM_HEX[obj.team], emissiveIntensity: .35 }));
-          gem.position.y = 1.1;
-          gem.scale.y = 1.35;
-          mesh.add(gem, box(1.1, .24, 1.1, 0x3b3849, .12));
+        if (crystal || obj.kind === 'dummy') {
+          if (crystal) {
+            const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.67),
+              new THREE.MeshLambertMaterial({ color: TEAM_HEX[obj.team], emissive: TEAM_HEX[obj.team], emissiveIntensity: .35 }));
+            gem.position.y = 1.1;
+            gem.scale.y = 1.35;
+            mesh.add(gem, box(1.1, .24, 1.1, 0x3b3849, .12));
+          } else {
+            mesh.add(box(.54, .52, .49, 0xc6a45f, 1.65),
+              box(.63, .68, .37, 0x9e713e, 1.06),
+              box(.92, .16, .23, 0xb88a54, 1.19),
+              box(.15, .75, .15, 0x795a3c, .42),
+              box(.68, .15, .63, 0x5e4c3d, .075));
+          }
           const canvas = document.createElement('canvas');
           canvas.width = 192;
           canvas.height = 32;
@@ -787,14 +795,14 @@ export class Renderer3D {
         }
       }
       if (obj.kind === 'ore' || obj.kind === 'dropped_crystal') mesh.children[0].rotation.y = this.time * 1.6;
-      if (obj.kind === 'crystal') {
-        mesh.children[0].rotation.y = this.time * 1.3;
+      if (mesh.userData.healthBar) {
+        if (obj.kind === 'crystal') mesh.children[0].rotation.y = this.time * 1.3;
         const bar = mesh.userData.healthBar;
         if (bar.hp !== obj.hp) {
           const ctx = bar.canvas.getContext('2d');
           ctx.fillStyle = '#171b28';
           ctx.fillRect(0, 0, 192, 32);
-          ctx.fillStyle = this.world.teams[obj.team].color;
+          ctx.fillStyle = obj.kind === 'dummy' ? '#95733e' : this.world.teams[obj.team].color;
           ctx.fillRect(3, 3, 186 * obj.hp / obj.max_hp, 26);
           ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'center';

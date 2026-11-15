@@ -67,7 +67,7 @@ export class Renderer2D {
   }
 
   syncObjectives(objects) {
-    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge'].includes(obj.kind));
+    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy'].includes(obj.kind));
   }
 
   project(x, y, z) {
@@ -136,7 +136,7 @@ export class Renderer2D {
           ctx.font = '600 11px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = ore.kind === 'forge' ? '#d5adff' : '#ffdd75';
-          ctx.fillText(ore.text || '拼音法阵', p.x, p.y);
+          ctx.fillText(ore.text || (ore.kind === 'dummy' ? '假人 ' + ore.hp + '/' + ore.max_hp : '拼音法阵'), p.x, p.y);
         }
         continue;
       }

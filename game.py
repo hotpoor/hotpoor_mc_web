@@ -175,6 +175,12 @@ class Game:
             for z in (-27, 27):
                 self.objects.append({"id": f"forge-{x}-{z}", "kind": "forge", "x": x, "z": z,
                                      "hp": 1, "max_hp": 1, "ready": 0})
+                inward_x = 1 if x < 0 else -1
+                inward_z = 1 if z < 0 else -1
+                for i, (dx, dz) in enumerate(((3, 0), (0, 3))):
+                    self.objects.append({"id": f"dummy-{x}-{z}-{i}", "kind": "dummy",
+                                         "x": x + dx * inward_x, "z": z + dz * inward_z,
+                                         "hp": MAX_HP * 2, "max_hp": MAX_HP * 2, "ready": 0})
         self.world["materials"] = MATERIALS
         self.world["recipes"] = {
             weapon: {
@@ -435,6 +441,11 @@ class Game:
 
     def hammer_slam(self, p, now):
         self.emit({"k": "slam", "x": p.x, "y": p.jump, "z": p.z})
+        for obj in self.targets(p):
+            if (obj["kind"] == "dummy" and p.jump <= 1.2
+                    and math.hypot(obj["x"] - p.x, obj["z"] - p.z) <= 3.6
+                    and not self.blocked(p.x, p.z, obj["x"], obj["z"])):
+                self.damage_object(p, obj, 55, now)
         for q in list(self.players.values()):
             if (q.alive and q.team != p.team and now >= q.invuln_until and abs(q.jump - p.jump) <= 1.2
                     and math.hypot(q.x - p.x, q.z - p.z) <= 3.6 and not self.blocked(p.x, p.z, q.x, q.z)):
@@ -536,18 +547,18 @@ class Game:
                              "hp": 1, "max_hp": 1, "ready": 0, "source": source, "expires": now + 60})
 
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb") and obj.get("team") != player.team]
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy") and obj.get("team") != player.team]
 
     @staticmethod
     def object_bounds(obj):
         x, z = obj["x"], obj["z"]
-        return ((x - .48, x + .48), (0, 2 if obj["kind"] == "crystal" else 1.7), (z - .48, z + .48))
+        return ((x - .48, x + .48), (0, 2 if obj["kind"] in ("crystal", "dummy") else 1.7), (z - .48, z + .48))
 
     def damage_object(self, player, obj, amount, now):
         obj["hp"] = max(0, obj["hp"] - amount)
         if obj["hp"]:
             return
-        obj["ready"] = now + (30 if obj["kind"] == "crystal" else 20)
+        obj["ready"] = now + {"crystal": 30, "bomb": 20, "dummy": 5}[obj["kind"]]
         self.emit({"k": obj["kind"], "x": obj["x"], "z": obj["z"], "team": obj.get("team")})
         if obj["kind"] == "bomb":
             for target in list(self.players.values()):
