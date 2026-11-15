@@ -420,6 +420,9 @@ class Game:
                         self.emit({"k": "attack", "id": p.id, "yaw": yaw, "hits": []})
                     else:
                         self.attack(p, yaw, now)
+            if not p.weapons.get(p.weapon, 0):
+                p.weapons.pop(p.weapon, None)
+                p.weapon = ""
         elif kind == "chat":
             text = str(data.get("text", ""))[:100].strip()
             if text:
