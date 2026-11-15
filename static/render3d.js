@@ -207,7 +207,7 @@ export class Renderer3D {
 
   showWeapon(weapons, kind) {
     for (const [weapon, mesh] of Object.entries(weapons)) {
-      mesh.visible = weapon === (kind || 'sword');
+      mesh.visible = weapon === kind;
     }
   }
 
@@ -658,13 +658,13 @@ export class Renderer3D {
     }
     this.waves = this.waves.filter(wave => {
       wave.age += dt;
-      const t = Math.min(1, wave.age / (wave.gun ? .10 : .34));
+      const t = Math.min(1, wave.age / (wave.slam ? .48 : wave.gun ? .10 : .34));
       if (wave.beam) {
         wave.mesh.position.lerpVectors(wave.start, wave.end, t / 2);
         wave.mesh.scale.set(1, wave.length * t, 1);
       } else {
         wave.mesh.position.lerpVectors(wave.start, wave.end, t);
-        wave.mesh.scale.setScalar(wave.blast ? .8 + t * 5 : .75 + t * .7);
+        wave.mesh.scale.setScalar(wave.slam ? .35 + t * 3.25 : wave.blast ? .8 + t * 5 : .75 + t * .7);
       }
       wave.mesh.material.opacity = 1 - t;
       if (t < 1) return true;
@@ -737,6 +737,17 @@ export class Renderer3D {
           mesh.add(bar);
           mesh.userData.healthBar = { canvas, map };
 
+        } else if (obj.kind === 'syllable' || obj.kind === 'forge') {
+          const forge = obj.kind === 'forge';
+          const ring = new THREE.Mesh(new THREE.RingGeometry(forge ? 1.6 : .23, forge ? 2 : .35, 36),
+            new THREE.MeshBasicMaterial({ color: forge ? 0xb885ff : 0xffdd75, side: THREE.DoubleSide }));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.y = .04;
+          const label = labelSprite(forge ? '拼音法阵 · E' : obj.text, forge ? '#b885ff' : '#ffdd75', 320, 120, 58);
+          label.scale.set(forge ? 3.4 : 1.45, .7, 1);
+          label.position.y = forge ? 1.3 : .8;
+          label.material.depthTest = true;
+          mesh.add(ring, label);
         } else if (obj.kind === 'ore' || obj.kind === 'dropped_crystal') {
           const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.42),
             new THREE.MeshLambertMaterial({ color: 0x54ffee, emissive: 0x078c81, emissiveIntensity: .7 }));
@@ -795,6 +806,16 @@ export class Renderer3D {
         }
       }
     }
+  }
+
+  spawnSlam(event) {
+    const position = new THREE.Vector3(event.x, event.y + .07, event.z);
+    const mesh = new THREE.Mesh(new THREE.RingGeometry(.77, 1, 48),
+      new THREE.MeshBasicMaterial({ color: 0xffce80, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.copy(position);
+    this.scene.add(mesh);
+    this.waves.push({ mesh, start: position, end: position, age: 0, slam: true });
   }
 
   spawnRepair(event) {

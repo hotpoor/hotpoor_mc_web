@@ -67,7 +67,7 @@ export class Renderer2D {
   }
 
   syncObjectives(objects) {
-    this.oreSites = objects.filter(obj => obj.kind === 'ore');
+    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge'].includes(obj.kind));
   }
 
   project(x, y, z) {
@@ -131,6 +131,15 @@ export class Renderer2D {
 
     for (const ore of this.oreSites || []) {
       const p = this.toScreen(ore.x, ore.z);
+      if (ore.kind !== 'ore') {
+        if (ore.hp) {
+          ctx.font = '600 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = ore.kind === 'forge' ? '#d5adff' : '#ffdd75';
+          ctx.fillText(ore.text || '拼音法阵', p.x, p.y);
+        }
+        continue;
+      }
       ctx.fillStyle = ore.hp ? '#54ffee' : '#41747a';
       ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
       if (!ore.hp) {

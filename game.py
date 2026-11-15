@@ -58,7 +58,11 @@ class Player:
     sprint: bool = False
     last_input: float = 0.0
     last_attack: float = 0.0
-    weapon: str = "sword"
+    weapon: str = ""
+    weapons: dict = field(default_factory=dict)
+    syllable: str = ""
+    syllables: list = field(default_factory=list)
+    slam_pending: bool = False
     skin: str = "steve"
     crystal_source: str | None = None
     draw_started: float | None = None
@@ -82,6 +86,17 @@ class Player:
 
 
 ARROW_GRAVITY = 18.0
+RECIPES = {
+    "sword": ("bǎo", "jiàn", 50),
+    "bow": ("gōng", "jiàn", 50),
+    "beam": ("guī", "pài", -1),
+    "rocket": ("huǒ", "jiàn", -1),
+    "gun": ("jī", "qiāng", 50),
+    "axe": ("zhàn", "fǔ", 30),
+    "mace": ("láng", "yá", 20),
+    "hammer": ("zhòng", "chuí", 10),
+}
+
 SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot")
 
 
@@ -124,6 +139,22 @@ class Game:
             if not collides(x, z, self.blocks):
                 self.objects.append({"id": f"ore-{x}-{z}", "kind": "ore", "x": x, "z": z,
                                      "hp": 1, "max_hp": 1, "ready": 0})
+        fields = ((-14,-10), (-7,-13), (7,-13), (14,-10), (-14,10), (-7,13), (7,13), (14,10),
+                  (-8,-5), (-5,-8), (5,-8), (8,-5), (-8,5), (-5,8), (5,8), (8,5))
+        letters = list(dict.fromkeys(letter for recipe in RECIPES.values() for letter in recipe[:2]))
+        occupied = [(obj["x"], obj["z"]) for obj in self.objects]
+        for i, ((x, z), letter) in enumerate(zip(fields, letters)):
+            x, z = next((x + dx, z + dz) for dx, dz in ((0,0), (1,0), (-1,0), (0,1), (0,-1), (2,0), (0,2), (-2,0), (0,-2))
+                        if not collides(x + dx, z + dz, self.blocks)
+                        and all(math.hypot(x + dx - ox, z + dz - oz) >= 2 for ox, oz in occupied))
+            occupied.append((x,z))
+            self.objects.append({"id": f"syllable-{i}", "kind": "syllable", "text": letter,
+                                 "x": x, "z": z, "hp": 1, "max_hp": 1, "ready": 0})
+        for x in (-27, 27):
+            for z in (-27, 27):
+                self.objects.append({"id": f"forge-{x}-{z}", "kind": "forge", "x": x, "z": z,
+                                     "hp": 1, "max_hp": 1, "ready": 0})
+        self.world["recipes"] = RECIPES
         self.arrows = {}
         self.next_arrow_id = 0
         self.players = {}                 # id -> Player
@@ -234,6 +265,9 @@ class Game:
         if kind == "interact":
             self.interact(p, now)
             return
+        if kind == "craft":
+            self.craft(p, data.get("weapon"))
+            return
         if kind == "skin":
             skin = data.get("skin")
             if skin in SKIN_NAMES:
@@ -277,18 +311,20 @@ class Game:
                 self.wave(p, yaw, now)
         elif kind == "equip":
             weapon = data.get("weapon")
-            if weapon in ("sword", "bow", "beam", "rocket", "gun", "axe", "mace", "hammer"):
+            if isinstance(weapon, str) and p.weapons.get(weapon, 0):
                 if weapon != p.weapon:
                     p.draw_started = None
                 p.weapon = weapon
         elif kind == "draw":
-            ready = ((p.weapon == "bow" and now - p.last_attack >= ATTACK_CD)
+            ready = p.weapons.get(p.weapon, 0) and ((p.weapon == "bow" and now - p.last_attack >= ATTACK_CD)
                      or (p.weapon == "beam" and now >= p.beam_ready))
             if p.alive and ready and p.draw_started is None:
                 p.draw_started = now
         elif kind == "cancel_draw":
             p.draw_started = None
         elif kind == "attack":
+            if not p.alive or not p.weapons.get(p.weapon, 0):
+                return
             try:
                 yaw = float(data.get("yaw", p.yaw))
             except (TypeError, ValueError):
@@ -299,6 +335,7 @@ class Game:
                 if p.alive and now >= max(p.gun_ready, p.next_round):
                     if p.ammo == 0:
                         p.ammo = 30
+                    self.spend_weapon(p)
                     p.ammo -= 1
                     p.next_round = now + .12
                     if p.ammo == 0:
@@ -320,9 +357,20 @@ class Game:
                     except (TypeError, ValueError):
                         pitch = 0
                     pitch = max(-1.15, min(1.15, pitch)) if math.isfinite(pitch) else 0
-                    self.shoot(p, yaw, pitch, now, min(1.0, now - started))
+                    if now - p.last_attack >= ATTACK_CD:
+                        self.spend_weapon(p)
+                        self.shoot(p, yaw, pitch, now, min(1.0, now - started))
             else:
-                self.attack(p, yaw, now)
+                cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5}.get(p.weapon, ATTACK_CD)
+                if now - p.last_attack >= cooldown and not p.slam_pending:
+                    self.spend_weapon(p)
+                    if p.weapon == "hammer" and not p.grounded:
+                        p.slam_pending = True
+                        p.last_attack = now
+                        p.jump_speed = min(p.jump_speed, -7)
+                        self.emit({"k": "attack", "id": p.id, "yaw": yaw, "hits": []})
+                    else:
+                        self.attack(p, yaw, now)
         elif kind == "chat":
             text = str(data.get("text", ""))[:100].strip()
             if text:
@@ -330,6 +378,33 @@ class Game:
                            "team": p.team, "text": text})
         elif kind == "ping":
             self.send(ws, {"t": "pong", "ts": data.get("ts")})
+
+    def spend_weapon(self, p):
+        if p.weapons[p.weapon] > 0:
+            p.weapons[p.weapon] -= 1
+
+    def forge_near(self, p):
+        return any(obj["kind"] == "forge" and math.hypot(p.x - obj["x"], p.z - obj["z"]) <= 3
+                   for obj in self.objects)
+
+    def craft(self, p, weapon):
+        if not isinstance(weapon, str) or weapon not in RECIPES or not p.alive or not self.forge_near(p):
+            return
+        first, second, uses = RECIPES[weapon]
+        if first not in p.syllables or second not in p.syllables or p.weapons.get(weapon, 0):
+            return
+        p.syllables.remove(first)
+        p.syllables.remove(second)
+        p.weapons[weapon] = uses
+        p.weapon = weapon
+        p.draw_started = None
+
+    def hammer_slam(self, p, now):
+        self.emit({"k": "slam", "x": p.x, "y": p.jump, "z": p.z})
+        for q in list(self.players.values()):
+            if (q.alive and q.team != p.team and now >= q.invuln_until and abs(q.jump - p.jump) <= 1.2
+                    and math.hypot(q.x - p.x, q.z - p.z) <= 3.6 and not self.blocked(p.x, p.z, q.x, q.z)):
+                self.damage(p, q, 55, now)
 
     # ---------------------------------------------------------------- combat
     def attack(self, p, yaw, now):
@@ -375,6 +450,12 @@ class Game:
                     and abs(player.jump - obj.get("y", 0)) <= 1.2
                     and not self.blocked(player.x, player.z, obj["x"], obj["z"]))
 
+        if player.syllable:
+            if self.forge_near(player):
+                player.syllables.append(player.syllable)
+                player.syllable = ""
+            return
+
         if player.crystal_source:
             crystal = next(obj for obj in self.objects if obj["id"] == player.team)
             if 0 < crystal["hp"] < crystal["max_hp"] and nearby(crystal, 5):
@@ -389,9 +470,14 @@ class Game:
             else:
                 self.drop_crystal(player, now)
             return
-        available = [obj for obj in self.objects if obj["kind"] in ("ore", "dropped_crystal") and obj["hp"] and nearby(obj)]
+        available = [obj for obj in self.objects if obj["kind"] in ("ore", "dropped_crystal", "syllable") and obj["hp"] and nearby(obj)]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
+            if ore["kind"] == "syllable":
+                player.syllable = ore["text"]
+                ore["hp"] = 0
+                ore["ready"] = now + 10
+                return
             if ore["kind"] == "dropped_crystal":
                 player.crystal_source = ore["source"]
                 self.objects.remove(ore)
@@ -602,6 +688,7 @@ class Game:
         self.drop_crystal(victim, now)
         victim.hp = 0
         victim.alive = False
+        victim.slam_pending = False
         victim.jump = victim.jump_speed = 0.0
         victim.draw_started = None
         victim.deaths += 1
@@ -709,6 +796,9 @@ class Game:
             p.grounded = height <= support
             p.jump = support if p.grounded else height
             p.jump_speed = 0.0 if p.grounded else p.jump_speed - 16 * dt
+            if p.grounded and p.slam_pending:
+                p.slam_pending = False
+                self.hammer_slam(p, now)
 
             rate = 0.0
             pool = pool_at(p.x, p.z, self.pools)
@@ -751,6 +841,8 @@ class Game:
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
                 "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
+                "weapons": p.weapons, "syllable": p.syllable, "syllables": p.syllables,
+                "forge_near": self.forge_near(p),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
                 "beam_cd": round(max(0, p.beam_ready - now), 1),
                 "rocket_cd": round(max(0, p.rocket_ready - now), 1),

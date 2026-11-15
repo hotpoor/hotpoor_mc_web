@@ -14,7 +14,7 @@ const G = {
   ws: null, id: null, name: '', team: '', teamChoice: 'auto', skin: 'steve', world: null,
   players: new Map(), me: null, renderer: null, connected: false, joined: false,
   keys: new Set(), mouse: { cx: innerWidth / 2, cy: innerHeight / 2, wx: 0, wz: 0 },
-  attacking: false, lastAttack: -Infinity, weapon: 'sword', drawStart: null, chatOpen: false, yaw: 0,
+  attacking: false, lastAttack: -Infinity, weapon: '', drawStart: null, chatOpen: false, yaw: 0,
   viewMode: 'third', dragging: false,
   invertLook: localStorage.getItem('mc.invertLook') === '1',
   teamScore: { red: 0, blue: 0 }, online: 0,
@@ -96,7 +96,8 @@ function onWelcome(msg) {
   G.world = msg.world;
   G.joined = true;
   updateSkinButton();
-  equip(G.weapon);
+  G.weapon = "";
+  updateWeaponLabel();
   $('login').classList.add('hidden');
   $('hud-name').textContent = msg.name;
   $('hud-team').textContent = msg.world.teams[msg.team].name;
@@ -125,6 +126,15 @@ async function initRenderer() {
     if (!G.joined || G.chatOpen) return;
     if (e.button === 2) { G.dragging = true; return; }
     if (e.button !== 0) return;
+    if (G.viewMode === 'first' && !document.pointerLockElement) {
+      // Pointer lock gives full 360-degree look; right-drag is the fallback
+      // when the browser refuses the request.
+      try {
+        const req = canvas.requestPointerLock && canvas.requestPointerLock();
+        if (req && req.catch) req.catch(() => {});
+      } catch (_) { /* right-drag still works */ }
+    }
+    if (!G.me?.weapons?.[G.weapon]) return;
     G.attacking = true;
     aimYaw();
     if (G.weapon === 'rocket') {
@@ -138,14 +148,7 @@ async function initRenderer() {
         send({ t: 'draw' });
       }
     } else tryAttack();
-    if (G.viewMode === 'first' && !document.pointerLockElement) {
-      // Pointer lock gives full 360-degree look; right-drag is the fallback
-      // when the browser refuses the request.
-      try {
-        const req = canvas.requestPointerLock && canvas.requestPointerLock();
-        if (req && req.catch) req.catch(() => {});
-      } catch (_) { /* right-drag still works */ }
-    }
+
   });
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
@@ -202,7 +205,18 @@ function applyState(s) {
     });
     // Our own facing is decided locally every frame (mouse look), never let
     // the 20 Hz snapshot overwrite it and cause jitter.
-    if (p.id === G.id) o.yaw = G.yaw;
+    if (p.id === G.id) {
+      o.yaw = G.yaw;
+      if (G.weapon !== p.weapon) {
+        G.weapon = p.weapon;
+        updateWeaponLabel();
+      }
+      o.weapon = p.weapon;
+      o.weapons = p.weapons;
+      o.syllable = p.syllable;
+      o.syllables = p.syllables;
+      o.forgeNear = p.forge_near;
+    }
   }
   for (const id of [...G.players.keys()]) {
     if (!seen.has(id)) {
@@ -240,6 +254,9 @@ function handleEvent(ev) {
       break;
     case 'arrow':
       G.renderer?.spawnArrow?.(ev);
+      break;
+    case 'slam':
+      G.renderer?.spawnSlam?.(ev);
       break;
     case 'crystal_repair':
       G.renderer?.spawnRepair?.(ev);
@@ -392,7 +409,7 @@ let nextGunShot = 0;
 
 function fireGun() {
   const now = performance.now();
-  if (!G.me?.alive || G.me.gunCd || now < nextGunShot) return;
+  if (!G.me?.alive || !G.me.weapons?.gun || G.me.gunCd || now < nextGunShot) return;
   nextGunShot = now + 130;
   send({ t: 'attack', yaw: G.yaw });
 }
@@ -464,15 +481,44 @@ function cancelDraw() {
   send({ t: 'cancel_draw' });
 }
 
+const WEAPON_NAMES = { sword: '宝剑', bow: '弓箭', beam: '龟派气功', rocket: '火箭筒',
+  gun: '机关枪', axe: '斧子', mace: '狼牙棒', hammer: '重锤' };
+
+function updateWeaponLabel() {
+  $('weapon-toggle').textContent = G.weapon ? '武器 · ' + WEAPON_NAMES[G.weapon] : '武器 · 未装备';
+}
+
 function equip(weapon) {
+  if (!G.me?.weapons?.[weapon]) {
+    if (G.world?.recipes?.[weapon]) log('到四角法阵组合拼音解锁' + WEAPON_NAMES[weapon], 'join');
+    return;
+  }
   if (weapon !== G.weapon) {
     cancelDraw();
     G.attacking = false;
+    send({ t: 'equip', weapon });
   }
-  G.weapon = weapon;
-  if (G.me) G.me.weapon = weapon;
-  $('weapon-toggle').textContent = ({ sword: '武器：剑 · 2 换弓', bow: '武器：弓 · 1 换剑', beam: '武器：龟派气功 · 1 换剑', rocket: '武器：火箭筒 · 1 换剑', gun: '武器：连射枪 · 1 换剑', axe: '武器：斧子 · 1 换剑', mace: '武器：狼牙棒 · 1 换剑', hammer: '武器：重锤 · 1 换剑' })[weapon];
-  send({ t: 'equip', weapon });
+}
+
+function updateForge(me) {
+  const panel = $('forge-panel');
+  panel.classList.toggle('hidden', !me.forgeNear || !me.alive);
+  $('syllable-status').textContent = me.syllable ? '携带 ' + me.syllable + ' · 到法阵按 E 存入'
+    : '法阵已存 · ' + (me.syllables?.join(' · ') || '无');
+  const key = JSON.stringify([me.syllables, me.weapons]);
+  if (!me.forgeNear || panel.dataset.inventory === key) return;
+  panel.dataset.inventory = key;
+  const recipes = $('forge-recipes');
+  recipes.replaceChildren();
+  for (const [weapon, [first, second, lifetime]] of Object.entries(G.world.recipes || {})) {
+    const button = document.createElement('button');
+    button.className = 'view-btn';
+    button.textContent = WEAPON_NAMES[weapon] + ' · ' + first + ' + ' + second;
+    button.disabled = !!me.weapons?.[weapon] || !me.syllables?.includes(first) || !me.syllables?.includes(second);
+    button.title = lifetime < 0 ? '无限使用' : lifetime + ' 次';
+    button.onclick = () => send({ t: 'craft', weapon });
+    recipes.append(button);
+  }
 }
 
 $('weapon-toggle').addEventListener('click', () => {
@@ -481,7 +527,7 @@ $('weapon-toggle').addEventListener('click', () => {
 
 function tryAttack() {
   const now = performance.now();
-  if (!G.me || !G.me.alive || now - G.lastAttack < ({ axe: 850, mace: 1100, hammer: 1500 }[G.weapon] || 500)) return;
+  if (!G.me || !G.me.alive || !G.me.weapons?.[G.weapon] || now - G.lastAttack < ({ axe: 850, mace: 1100, hammer: 1500 }[G.weapon] || 500)) return;
   G.lastAttack = now;
   // Play our own swing immediately so the weapon follows the click without
   // waiting a round-trip; other players' swings come from the server event.
@@ -649,7 +695,10 @@ function updateHud() {
   $('stat-deaths').textContent = me.deaths ?? 0;
   $('wave-btn').textContent = me.waveCd > 0 ? '气功波 · ' + Math.ceil(me.waveCd) + ' 秒' : '气功波 · Q';
   const charge = G.weapon === 'beam' && me.draw != null ? ' · 蓄力 ' + Math.floor(me.draw * 100) + '%' : '';
-  $('collect-btn').textContent = me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';
+  updateForge(me);
+  const uses = me.weapons?.[G.weapon];
+  $('weapon-life').textContent = uses === -1 ? '剩余次数 · 无限' : uses != null ? '剩余次数 · ' + uses : '';
+  $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
   $('recall-btn').textContent = me.recall ? '回城中 · ' + me.recall.toFixed(1) + ' 秒'
     : me.recallCd ? '回城 · ' + me.recallCd + ' 秒' : '回城 · H';
