@@ -523,7 +523,7 @@ export class Renderer3D {
     this.time += dt;
     this.syncRecall(players);
     this.myId = me ? me.id : null;
-    const first = this.viewMode === 'first';
+    const first = this.viewMode === 'first' && !!me?.alive;
     const seen = new Set();
     for (const p of players) {
       seen.add(p.id);
@@ -540,7 +540,23 @@ export class Renderer3D {
       }
       const selfHidden = first && me && p.id === me.id;
       g.visible = !!p.alive && !selfHidden;
-      if (!p.alive) continue;
+      if (!p.alive) {
+        if (avatar.deathAge === undefined) {
+          avatar.deathAge = 0;
+          avatar.swing.visible = false;
+          this.poseArms(avatar.rig, p.weapon, null, 0, 0, 0);
+        }
+        avatar.deathAge += dt;
+        const age = avatar.deathAge;
+        const fall = Math.min(1, age / .32);
+        g.rotation.order = 'YXZ';
+        g.rotation.x = -Math.PI / 2 * fall * (2 - fall);
+        g.position.set(p.rx, (p.jump || 0) + fall * .29, p.rz);
+        g.visible = age < 1.26 && (age < .42 || Math.floor((age - .42) * 8) % 2 === 0);
+        continue;
+      }
+      avatar.deathAge = undefined;
+      g.rotation.x = 0;
       g.position.set(p.rx, p.jump || 0, p.rz);
       const target = p.yaw;
       let diff = target - g.rotation.y;

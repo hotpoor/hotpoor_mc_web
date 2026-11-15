@@ -350,7 +350,7 @@ class Game:
                 continue
             if self.blocked(p.x, p.z, q.x, q.z):
                 continue
-            self.damage(p, q, damage, now)
+            self.damage(p, q, damage, now, mace=p.weapon == "mace")
             hits.append(q.id)
             if len(hits) >= 3:
                 break
@@ -511,17 +511,29 @@ class Game:
                     return True
         return False
 
-    def damage(self, attacker, victim, amount, now):
+    def damage(self, attacker, victim, amount, now, mace=False):
         victim.recall_until = 0.0
         victim.hp -= amount
         victim.last_damage_at = now
         attacker.damage += int(amount)
         fx, fz = math.sin(attacker.yaw), math.cos(attacker.yaw)
-        nx, nz = victim.x + fx * 0.65, victim.z + fz * 0.65
-        if not collides(nx, victim.z, self.blocks, feet=victim.jump):
-            victim.x = nx
-        if not collides(victim.x, nz, self.blocks, feet=victim.jump):
-            victim.z = nz
+        if mace:
+            dx, dz = victim.x - attacker.x, victim.z - attacker.z
+            distance = math.hypot(dx, dz)
+            if distance:
+                fx, fz = dx / distance, dz / distance
+            # Sweep the whole shove so it cannot skip over a one-block wall.
+            for _ in range(24):
+                nx, nz = victim.x + fx * .1, victim.z + fz * .1
+                if collides(nx, nz, self.blocks, feet=victim.jump):
+                    break
+                victim.x, victim.z = nx, nz
+        else:
+            nx, nz = victim.x + fx * .65, victim.z + fz * .65
+            if not collides(nx, victim.z, self.blocks, feet=victim.jump):
+                victim.x = nx
+            if not collides(victim.x, nz, self.blocks, feet=victim.jump):
+                victim.z = nz
         self.emit({"k": "hit", "id": victim.id, "by": attacker.id,
                    "dmg": amount, "hp": max(0, round(victim.hp))})
         if victim.hp <= 0:
