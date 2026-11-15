@@ -95,6 +95,7 @@ function onWelcome(msg) {
   G.team = msg.team;
   G.world = msg.world;
   G.joined = true;
+  sendCraftModes();
   updateSkinButton();
   G.weapon = "";
   updateWeaponLabel();
@@ -233,7 +234,7 @@ function applyState(s) {
   $('score-red').textContent = G.teamScore.red || 0;
   $('score-blue').textContent = G.teamScore.blue || 0;
   const objects = s.objects || [];
-  G.renderer?.syncObjectives?.(objects);
+  G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))));
   for (const team of ['red', 'blue']) {
     const crystal = objects.find(obj => obj.id === team);
     if (crystal) $('crystal-' + team).textContent = crystal.hp
@@ -522,23 +523,48 @@ function equip(weapon) {
   }
 }
 
+const craftModeInputs = [...document.querySelectorAll('#craft-modes input')];
+for (const input of craftModeInputs) {
+  input.checked = localStorage.getItem('mc.craft.' + input.value) !== '0';
+  input.addEventListener('change', () => {
+    localStorage.setItem('mc.craft.' + input.value, input.checked ? '1' : '0');
+    sendCraftModes();
+    if (G.me) updateForge(G.me);
+  });
+}
+
+function enabledCraftModes() {
+  return craftModeInputs.filter(input => input.checked).map(input => input.value);
+}
+
+function sendCraftModes() {
+  send({ t: 'craft_modes', modes: enabledCraftModes() });
+}
+
+function materialMode(material) {
+  const prefix = material.split(':', 1)[0];
+  return prefix === 'text' || prefix === 'whole' ? prefix : 'split';
+}
+
 function updateForge(me) {
   const panel = $('forge-panel');
   panel.classList.toggle('hidden', !me.forgeNear || !me.alive);
   const label = id => G.world.materials?.[id] || id;
   $('syllable-status').textContent = me.syllable ? '携带 ' + label(me.syllable) + ' · 到法阵按 E 存入'
     : '法阵已存 · ' + (me.syllables?.map(label).join(' / ') || '无');
-  const key = JSON.stringify([me.syllables, me.weapons]);
+  const modes = enabledCraftModes();
+  const key = JSON.stringify([me.syllables, me.weapons, modes]);
   if (!me.forgeNear || panel.dataset.inventory === key) return;
   panel.dataset.inventory = key;
   const recipes = $('forge-recipes');
   recipes.replaceChildren();
-  for (const [weapon, recipe] of Object.entries(G.world.recipes || {})) {
+  if (!modes.length) recipes.textContent = '合成已关闭';
+  for (const [weapon, recipe] of Object.entries(modes.length ? G.world.recipes || {} : {})) {
     const heading = document.createElement('div');
     heading.className = 'hud-status';
     heading.textContent = WEAPON_NAMES[weapon];
     recipes.append(heading);
-    for (const mode of ['text', 'whole', 'split']) {
+    for (const mode of modes) {
       const button = document.createElement('button');
       button.className = 'view-btn';
       const required = recipe[mode];

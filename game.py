@@ -60,6 +60,7 @@ class Player:
     last_attack: float = 0.0
     weapon: str = ""
     weapons: dict = field(default_factory=dict)
+    craft_modes: tuple = ("text", "whole", "split")
     syllable: str = ""
     syllables: list = field(default_factory=list)
     slam_pending: bool = False
@@ -306,6 +307,11 @@ class Game:
         if kind == "interact":
             self.interact(p, now)
             return
+        if kind == "craft_modes":
+            modes = data.get("modes")
+            if isinstance(modes, list):
+                p.craft_modes = tuple(mode for mode in ("text", "whole", "split") if mode in modes)
+            return
         if kind == "craft":
             self.craft(p, data.get("weapon"), data.get("mode"))
             return
@@ -431,7 +437,7 @@ class Game:
                    for obj in self.objects)
 
     def craft(self, p, weapon, mode):
-        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in ("text", "whole", "split")
+        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in p.craft_modes
                 or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0) >= WEAPON_USES[mode]):
             return
         recipe = self.world["recipes"][weapon]
@@ -492,6 +498,11 @@ class Game:
                 break
         self.emit({"k": "attack", "id": p.id, "yaw": yaw, "hits": hits})
 
+    @staticmethod
+    def material_mode(material):
+        prefix = material.split(":", 1)[0]
+        return prefix if prefix in ("text", "whole") else "split"
+
     def interact(self, player, now):
         if not player.alive or player.recall_until:
             return
@@ -522,7 +533,8 @@ class Game:
                 self.drop_crystal(player, now)
             return
         available = [obj for obj in self.objects
-                     if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal", "syllable")
+                     if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
+                         or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in player.craft_modes)
                          or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < WEAPON_USES["pickup"]))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
