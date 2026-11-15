@@ -8,7 +8,7 @@ const TEAM_CSS = { red: '#ef4f4f', blue: '#4c86f0' };
 let canvas = $('view');
 
 const G = {
-  ws: null, id: null, name: '', team: '', teamChoice: 'auto', world: null,
+  ws: null, id: null, name: '', team: '', teamChoice: 'auto', skin: 'steve', world: null,
   players: new Map(), me: null, renderer: null, connected: false, joined: false,
   keys: new Set(), mouse: { cx: innerWidth / 2, cy: innerHeight / 2, wx: 0, wz: 0 },
   attacking: false, lastAttack: -Infinity, weapon: 'sword', drawStart: null, chatOpen: false, yaw: 0,
@@ -61,7 +61,7 @@ function connect() {
     checkUpdate();
     setConn(true);
     $('offline').classList.add('hidden');
-    send({ t: 'join', name: G.name, team: G.teamChoice === 'auto' ? null : G.teamChoice });
+    send({ t: 'join', name: G.name, team: G.teamChoice === 'auto' ? null : G.teamChoice, skin: G.skin });
   };
   ws.onmessage = e => {
     let msg;
@@ -127,7 +127,7 @@ async function initRenderer() {
       if (G.me?.alive && !G.me.rocketCd) send({ t: 'attack', yaw: G.yaw });
     } else if (G.weapon === 'gun') {
       fireGun();
-    } else if (G.weapon !== 'sword') {
+    } else if (G.weapon !== 'sword' && G.weapon !== 'axe') {
       const now = performance.now();
       if (G.me?.alive && G.drawStart === null && (G.weapon === 'beam' ? !G.me.beamCd : now - G.lastAttack >= 470)) {
         G.drawStart = now;
@@ -192,7 +192,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
+      name: p.name, team: p.team, skin: p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -289,8 +289,8 @@ window.addEventListener('keydown', e => {
   }
   if (k === 'escape' && G.chatOpen) { closeChat(); return; }
   if (G.chatOpen || e.target === $('chat-input')) return;
-  if (['1', '2', '3', '4', '5'].includes(k) && G.joined && !e.repeat) {
-    equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun' }[k]);
+  if (['1', '2', '3', '4', '5', '6'].includes(k) && G.joined && !e.repeat) {
+    equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe' }[k]);
     return;
   }
   if (k === 'h' && !e.repeat) { e.preventDefault(); recallHome(); return; }
@@ -388,6 +388,7 @@ function fireGun() {
   send({ t: 'attack', yaw: G.yaw });
 }
 
+$('axe-btn').addEventListener('click', () => { if (G.joined) equip('axe'); });
 $('gun-btn').addEventListener('click', () => { if (G.joined) equip('gun'); });
 
 function recallHome() {
@@ -420,7 +421,7 @@ function equip(weapon) {
   }
   G.weapon = weapon;
   if (G.me) G.me.weapon = weapon;
-  $('weapon-toggle').textContent = ({ sword: '武器：剑 · 2 换弓', bow: '武器：弓 · 1 换剑', beam: '武器：龟派气功 · 1 换剑', rocket: '武器：火箭筒 · 1 换剑', gun: '武器：连射枪 · 1 换剑' })[weapon];
+  $('weapon-toggle').textContent = ({ sword: '武器：剑 · 2 换弓', bow: '武器：弓 · 1 换剑', beam: '武器：龟派气功 · 1 换剑', rocket: '武器：火箭筒 · 1 换剑', gun: '武器：连射枪 · 1 换剑', axe: '武器：斧子 · 1 换剑' })[weapon];
   send({ t: 'equip', weapon });
 }
 
@@ -430,11 +431,11 @@ $('weapon-toggle').addEventListener('click', () => {
 
 function tryAttack() {
   const now = performance.now();
-  if (!G.me || !G.me.alive || now - G.lastAttack < 470) return;
+  if (!G.me || !G.me.alive || now - G.lastAttack < (G.weapon === 'axe' ? 850 : 500)) return;
   G.lastAttack = now;
   // Play our own swing immediately so the weapon follows the click without
   // waiting a round-trip; other players' swings come from the server event.
-  if (G.weapon === 'sword' && G.renderer) G.renderer.spawnSwing(G.id);
+  if (['sword', 'axe'].includes(G.weapon) && G.renderer) G.renderer.spawnSwing(G.id);
   send({ t: 'attack', yaw: G.yaw });
   pulseCrosshair();
 }
@@ -499,7 +500,7 @@ function frame(now) {
   aimYaw();
   if (G.me) G.me.draw = G.drawStart === null ? null : Math.min(1, (now - G.drawStart) / 1000);
   if (G.attacking && !G.chatOpen) {
-    if (G.weapon === 'sword') tryAttack();
+    if (['sword', 'axe'].includes(G.weapon)) tryAttack();
     if (G.weapon === 'gun') fireGun();
   }
 
@@ -714,6 +715,8 @@ document.querySelectorAll('.pick').forEach(btn => {
   });
 });
 $('join-btn').addEventListener('click', () => {
+  G.skin = $('skin-select').value;
+  localStorage.setItem('mc.skin', G.skin);
   G.name = $('name-input').value.trim() || randomName();
   localStorage.setItem('mc_name', G.name);
   $('join-btn').disabled = true;
@@ -750,6 +753,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+$('skin-select').value = localStorage.getItem('mc.skin') === 'alex' ? 'alex' : 'steve';
 const query = new URLSearchParams(location.search);
 $('name-input').value = query.get('name') || localStorage.getItem('mc_name') || randomName();
 if (['red', 'blue'].includes(query.get('team'))) {

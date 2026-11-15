@@ -59,6 +59,7 @@ class Player:
     last_input: float = 0.0
     last_attack: float = 0.0
     weapon: str = "sword"
+    skin: str = "steve"
     draw_started: float | None = None
     jump: float = 0.0
     jump_speed: float = 0.0
@@ -147,7 +148,7 @@ class Game:
         self.db.add_history("leave", p.name, team=p.team, detail="离开世界")
         self.emit({"k": "leave", "id": p.id, "name": p.name, "team": p.team})
 
-    def join(self, ws, raw_name, requested_team):
+    def join(self, ws, raw_name, requested_team, skin=None):
         if self.sockets.get(ws, "missing") == "missing":
             self.sockets[ws] = None
         if self.sockets.get(ws):
@@ -176,6 +177,7 @@ class Game:
         now = time.monotonic()
         p = Player(
             id=pid, name=name, team=team, ws=ws,
+            skin="alex" if skin == "alex" else "steve",
             x=spawn[0] + random.uniform(-1.4, 1.4),
             z=spawn[1] + random.uniform(-2.4, 2.4),
             yaw=0.0 if team == "red" else math.pi,
@@ -215,7 +217,7 @@ class Game:
             return
         kind = data.get("t")
         if kind == "join":
-            self.join(ws, data.get("name"), data.get("team"))
+            self.join(ws, data.get("name"), data.get("team"), data.get("skin"))
             return
         pid = self.sockets.get(ws)
         p = self.players.get(pid) if pid else None
@@ -260,7 +262,7 @@ class Game:
                 self.wave(p, yaw, now)
         elif kind == "equip":
             weapon = data.get("weapon")
-            if weapon in ("sword", "bow", "beam", "rocket", "gun"):
+            if weapon in ("sword", "bow", "beam", "rocket", "gun", "axe"):
                 if weapon != p.weapon:
                     p.draw_started = None
                 p.weapon = weapon
@@ -316,7 +318,9 @@ class Game:
 
     # ---------------------------------------------------------------- combat
     def attack(self, p, yaw, now):
-        if not p.alive or now - p.last_attack < ATTACK_CD:
+        damage = 36 if p.weapon == "axe" else ATTACK_DAMAGE
+        cooldown = .85 if p.weapon == "axe" else ATTACK_CD
+        if not p.alive or now - p.last_attack < cooldown:
             return
         p.last_attack = now
         p.yaw = yaw
@@ -326,7 +330,7 @@ class Game:
             distance = math.hypot(dx, dz)
             if (distance <= ATTACK_RANGE and dx * fx + dz * fz >= distance * ATTACK_ARC_COS
                     and abs(p.jump - .5) < 1.7 and not self.blocked(p.x, p.z, obj["x"], obj["z"])):
-                self.damage_object(p, obj, ATTACK_DAMAGE, now)
+                self.damage_object(p, obj, damage, now)
         hits = []
         for q in list(self.players.values()):
             if q.id == p.id or not q.alive or q.team == p.team:
@@ -341,7 +345,7 @@ class Game:
                 continue
             if self.blocked(p.x, p.z, q.x, q.z):
                 continue
-            self.damage(p, q, ATTACK_DAMAGE, now)
+            self.damage(p, q, damage, now)
             hits.append(q.id)
             if len(hits) >= 3:
                 break
@@ -665,7 +669,7 @@ class Game:
                 "id": p.id, "name": p.name, "team": p.team,
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
-                "alive": p.alive, "weapon": p.weapon, "jump": round(p.jump, 3),
+                "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "jump": round(p.jump, 3),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
                 "beam_cd": round(max(0, p.beam_ready - now), 1),
                 "rocket_cd": round(max(0, p.rocket_ready - now), 1),

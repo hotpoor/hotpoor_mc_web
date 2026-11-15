@@ -60,6 +60,7 @@
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
   <button id="wave-btn" class="view-btn">气功波 · Q</button>
   <button id="recall-btn" class="view-btn">回城 · H</button>
+  <button id="axe-btn" class="view-btn">斧子 · 6</button>
   <button id="gun-btn" class="view-btn">连射枪 · 5 · 30/30</button>
   <button id="rocket-btn" class="view-btn">火箭筒 · 4</button>
   <button id="beam-btn" class="view-btn">龟派气功 · 3</button>
@@ -138,6 +139,11 @@
       <button class="pick red" data-team="red"><i></i>赤焰营地</button>
       <button class="pick blue" data-team="blue"><i></i>苍蓝营地</button>
     </div>
+    <label class="field-label" for="skin-select">人物皮肤</label>
+    <select id="skin-select" class="view-btn">
+      <option value="steve">史蒂夫</option>
+      <option value="alex">艾利克斯</option>
+    </select>
     <button id="join-btn" class="join-btn">进入世界</button>
     <div id="login-msg" class="login-msg"></div>
     <div class="login-foot">回血池争夺 · 击杀计分 · 5 秒回城复活 · 战绩存 SQLite</div>
@@ -151,6 +157,6 @@
   </div>
 </div>
 
-<script type="module" src="/static/main.js?v=15"></script>
+<script type="module" src="/static/main.js?v=16"></script>
 </body>
 </html>

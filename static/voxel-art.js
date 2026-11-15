@@ -53,6 +53,11 @@ export function makeWeapon(kind, overlay = false) {
     part(.16, .65, .10, 0x3a9e9d, 0, .45);
     part(.085, .60, .102, 0xaaf4df, .022, .47);
     part(.095, .09, .10, 0x8df1d9, .025, .81);
+  } else if (kind === 'axe') {
+    part(.095, .81, .10, 0x754c2c, 0, .22);
+    part(.22, .18, .13, 0x497d80, .08, .55);
+    part(.26, .34, .105, 0x699fa5, .24, .55);
+    part(.08, .39, .105, 0xb5e3e5, .40, .55);
   } else if (kind === 'bow') {
     part(.11, .20, .13, 0x644228, 0, 0);
     for (const sign of [-1, 1]) {

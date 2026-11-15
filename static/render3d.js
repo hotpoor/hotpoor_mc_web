@@ -2,7 +2,9 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=13';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=16';
+
+import { makeSkin } from './player-skins.js?v=16';
 
 const TEAM_HEX = { red: 0xef4f4f, blue: 0x4c86f0 };
 const ARC = Math.PI * 65 / 180;
@@ -86,6 +88,7 @@ export class Renderer3D {
       ['grass', 'dirt', 'grassSide', 'stone', 'brick', 'bark', 'rings', 'leaves']
         .map(kind => [kind, voxelMaterial(kind)]),
     );
+    this.skins = { steve: makeSkin('steve'), alex: makeSkin('alex') };
     this.buildViewModel();
     this.buildGround();
     this.buildWalls();
@@ -123,12 +126,12 @@ export class Renderer3D {
         pivot.add(mesh);
       }
       parent.add(pivot);
-      return { pivot, sleeve };
+      return { pivot, sleeve, hand };
     };
     const right = createArm(-.43);
     const left = createArm(.43);
     const weapons = {};
-    for (const kind of ['sword', 'bow', 'rocket', 'gun']) {
+    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe']) {
       const weapon = makeWeapon(kind, overlay);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
@@ -140,7 +143,23 @@ export class Renderer3D {
     charge.position.set(0, -.5, .59);
     charge.renderOrder = 999;
     parent.add(charge);
-    return { right, left, weapons, charge };
+    const rig = { right, left, weapons, charge };
+    this.applyArmSkin(rig, 'steve');
+    return rig;
+  }
+
+  applyArmSkin(rig, name) {
+    if (rig.skin === name) return;
+    const skin = this.skins[name] || this.skins.steve;
+    for (const { sleeve, hand } of [rig.left, rig.right]) {
+      sleeve.material.color.setHex(0xffffff);
+      hand.material.color.setHex(0xffffff);
+      sleeve.material.map = skin.sleeve;
+      hand.material.map = skin.hand;
+      sleeve.material.needsUpdate = hand.material.needsUpdate = true;
+      sleeve.scale.x = hand.scale.x = name === 'alex' ? .78 : 1;
+    }
+    rig.skin = name;
   }
 
   poseArms(rig, weapon, draw, swing, walk, recoil) {
@@ -166,14 +185,14 @@ export class Renderer3D {
       right.rotation.set(-.38 + walk * .7 - swing * 1.45, swing * .62, swing * .56);
       left.rotation.set(-walk * .7, 0, 0);
       rig.weapons.sword.rotation.set(.28, 0, -.12);
+      rig.weapons.axe.rotation.set(.28, 0, -.12);
     }
   }
 
   showWeapon(weapons, kind) {
-    weapons.sword.visible = kind !== 'bow' && kind !== 'beam' && kind !== 'rocket' && kind !== 'gun';
-    weapons.bow.visible = kind === 'bow';
-    weapons.rocket.visible = kind === 'rocket';
-    weapons.gun.visible = kind === 'gun';
+    for (const [weapon, mesh] of Object.entries(weapons)) {
+      mesh.visible = weapon === (kind || 'sword');
+    }
   }
 
   buildGround() {
@@ -418,24 +437,16 @@ export class Renderer3D {
   createPlayer(p) {
     const g = new THREE.Group();
     const hex = TEAM_HEX[p.team] || 0xcccccc;
-    const teamMat = new THREE.MeshLambertMaterial({ color: hex });
-    const dark = new THREE.MeshLambertMaterial({ color: new THREE.Color(hex).multiplyScalar(0.72) });
-    const skin = new THREE.MeshLambertMaterial({ color: 0xf0c49b });
-
-    const body = box(0.62, 0.8, 0.34, 0xffffff, 0.95);
-    body.material = teamMat; g.add(body);
-    const head = box(0.54, 0.54, 0.54, 0xffffff, 1.62);
-    head.material = skin; g.add(head);
-    const helmet = box(0.6, 0.18, 0.6, 0xffffff, 1.94);
-    helmet.material = teamMat; g.add(helmet);
-    for (const s of [-1, 1]) {
-      const eye = box(0.09, 0.09, 0.03, 0x22201e, 1.66, true);
-      eye.position.set(s * 0.14, 1.66, 0.285);
-      g.add(eye);
-    }
-    const legL = box(0.25, 0.62, 0.27, 0xffffff, 0.31);
-    const legR = box(0.25, 0.62, 0.27, 0xffffff, 0.31);
-    legL.material = dark; legR.material = dark;
+    const skin = this.skins[p.skin] || this.skins.steve;
+    const material = map => new THREE.MeshLambertMaterial({ map });
+    const body = box(.62, .8, .34, 0xffffff, .95);
+    body.material = material(skin.top);
+    const head = box(.54, .54, .54, 0xffffff, 1.62);
+    head.material = skin.head.map(material);
+    g.add(body, head);
+    const legL = box(.25, .62, .27, 0xffffff, .31);
+    const legR = box(.25, .62, .27, 0xffffff, .31);
+    legL.material = legR.material = material(skin.legs);
     legL.position.x = -0.16; legR.position.x = 0.16;
     g.add(legL, legR);
 
@@ -443,6 +454,7 @@ export class Renderer3D {
     shoulders.position.y = 1.32;
     g.add(shoulders);
     const rig = this.makeArmRig(shoulders, hex);
+    this.applyArmSkin(rig, p.skin || 'steve');
 
     const halo = new THREE.Mesh(
       new THREE.RingGeometry(0.58, 0.74, 24),
@@ -624,6 +636,7 @@ export class Renderer3D {
     this.bowKick = Math.max(0, this.bowKick - dt);
     if (this.viewModel.visible) {
       const swing = Math.sin(Math.PI * this.swingSelf / .24);
+      this.applyArmSkin(this.viewRig, me.skin || 'steve');
       this.poseArms(this.viewRig, me.weapon, me.draw ?? null, swing, 0, this.bowKick);
     }
   }
@@ -735,11 +748,7 @@ export class Renderer3D {
     this.viewModel.visible = first;
     this.camera.fov = first ? 76 : 54;
     this.camera.updateProjectionMatrix();
-    if (team) {
-      for (const arm of [this.viewRig.left, this.viewRig.right]) {
-        arm.sleeve.material.color.setHex(TEAM_HEX[team] || 0x6ab04c);
-      }
-    }
+
   }
 
   applyLook(dx, dy) {
