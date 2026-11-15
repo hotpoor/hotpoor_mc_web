@@ -473,7 +473,7 @@ export class Renderer3D {
     swing.visible = false;
     g.add(swing);
 
-    g.userData = { rig, legL, legR, swing, swingLife: 0, walk: 0 };
+    g.userData = { skin: p.skin, body, head, rig, legL, legR, swing, swingLife: 0, walk: 0 };
     this.scene.add(g);
     this.meshes.set(p.id, g);
     return g;
@@ -528,6 +528,15 @@ export class Renderer3D {
       seen.add(p.id);
       let g = this.meshes.get(p.id);
       if (!g) g = this.createPlayer(p);
+      const avatar = g.userData;
+      if (avatar.skin !== p.skin) {
+        const skin = this.skins[p.skin] || this.skins.steve;
+        avatar.head.material.forEach((material, i) => { material.map = skin.head[i]; });
+        avatar.body.material.map = skin.top;
+        avatar.legL.material.map = skin.legs;
+        this.applyArmSkin(avatar.rig, p.skin || 'steve');
+        avatar.skin = p.skin;
+      }
       const selfHidden = first && me && p.id === me.id;
       g.visible = !!p.alive && !selfHidden;
       if (!p.alive) continue;

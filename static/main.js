@@ -92,6 +92,7 @@ function onWelcome(msg) {
   G.team = msg.team;
   G.world = msg.world;
   G.joined = true;
+  updateSkinButton();
   equip(G.weapon);
   $('login').classList.add('hidden');
   $('hud-name').textContent = msg.name;
@@ -192,7 +193,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -387,6 +388,20 @@ function fireGun() {
   nextGunShot = now + 130;
   send({ t: 'attack', yaw: G.yaw });
 }
+
+function updateSkinButton() {
+  $('skin-toggle').textContent = '皮肤 · ' + (G.skin === 'alex' ? '艾利克斯' : '史蒂夫');
+}
+
+$('skin-toggle').addEventListener('click', () => {
+  if (!G.joined) return;
+  G.skin = G.skin === 'alex' ? 'steve' : 'alex';
+  localStorage.setItem('mc.skin', G.skin);
+  $('skin-select').value = G.skin;
+  if (G.me) G.me.skin = G.skin;
+  updateSkinButton();
+  send({ t: 'skin', skin: G.skin });
+});
 
 $('axe-btn').addEventListener('click', () => { if (G.joined) equip('axe'); });
 $('gun-btn').addEventListener('click', () => { if (G.joined) equip('gun'); });

@@ -224,6 +224,11 @@ class Game:
         if not p:
             return
         now = time.monotonic()
+        if kind == "skin":
+            skin = data.get("skin")
+            if skin in ("steve", "alex"):
+                p.skin = skin
+            return
         if kind == "recall":
             if p.alive and p.grounded and not p.recall_until and now >= p.recall_ready:
                 p.mx = p.mz = 0.0
