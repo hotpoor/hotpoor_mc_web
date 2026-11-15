@@ -131,7 +131,7 @@ async function initRenderer() {
       if (G.me?.alive && !G.me.rocketCd) send({ t: 'attack', yaw: G.yaw });
     } else if (G.weapon === 'gun') {
       fireGun();
-    } else if (!['sword', 'axe', 'mace'].includes(G.weapon)) {
+    } else if (!['sword', 'axe', 'mace', 'hammer'].includes(G.weapon)) {
       const now = performance.now();
       if (G.me?.alive && G.drawStart === null && (G.weapon === 'beam' ? !G.me.beamCd : now - G.lastAttack >= 470)) {
         G.drawStart = now;
@@ -297,8 +297,8 @@ window.addEventListener('keydown', e => {
   }
   if (k === 'escape' && G.chatOpen) { closeChat(); return; }
   if (G.chatOpen || e.target === $('chat-input')) return;
-  if (['1', '2', '3', '4', '5', '6', '7'].includes(k) && G.joined && !e.repeat) {
-    equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace' }[k]);
+  if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(k) && G.joined && !e.repeat) {
+    equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace', 8: 'hammer' }[k]);
     return;
   }
   if (k === 'e' && !e.repeat) { e.preventDefault(); interactCrystal(); return; }
@@ -430,6 +430,7 @@ $('skin-toggle').addEventListener('click', () => {
   $('skin-toggle').setAttribute('aria-expanded', String(!hidden));
 });
 
+$('hammer-btn').addEventListener('click', () => { if (G.joined) equip('hammer'); });
 $('mace-btn').addEventListener('click', () => { if (G.joined) equip('mace'); });
 $('axe-btn').addEventListener('click', () => { if (G.joined) equip('axe'); });
 $('gun-btn').addEventListener('click', () => { if (G.joined) equip('gun'); });
@@ -470,7 +471,7 @@ function equip(weapon) {
   }
   G.weapon = weapon;
   if (G.me) G.me.weapon = weapon;
-  $('weapon-toggle').textContent = ({ sword: '武器：剑 · 2 换弓', bow: '武器：弓 · 1 换剑', beam: '武器：龟派气功 · 1 换剑', rocket: '武器：火箭筒 · 1 换剑', gun: '武器：连射枪 · 1 换剑', axe: '武器：斧子 · 1 换剑', mace: '武器：狼牙棒 · 1 换剑' })[weapon];
+  $('weapon-toggle').textContent = ({ sword: '武器：剑 · 2 换弓', bow: '武器：弓 · 1 换剑', beam: '武器：龟派气功 · 1 换剑', rocket: '武器：火箭筒 · 1 换剑', gun: '武器：连射枪 · 1 换剑', axe: '武器：斧子 · 1 换剑', mace: '武器：狼牙棒 · 1 换剑', hammer: '武器：重锤 · 1 换剑' })[weapon];
   send({ t: 'equip', weapon });
 }
 
@@ -480,11 +481,11 @@ $('weapon-toggle').addEventListener('click', () => {
 
 function tryAttack() {
   const now = performance.now();
-  if (!G.me || !G.me.alive || now - G.lastAttack < ({ axe: 850, mace: 1100 }[G.weapon] || 500)) return;
+  if (!G.me || !G.me.alive || now - G.lastAttack < ({ axe: 850, mace: 1100, hammer: 1500 }[G.weapon] || 500)) return;
   G.lastAttack = now;
   // Play our own swing immediately so the weapon follows the click without
   // waiting a round-trip; other players' swings come from the server event.
-  if (['sword', 'axe', 'mace'].includes(G.weapon) && G.renderer) G.renderer.spawnSwing(G.id);
+  if (['sword', 'axe', 'mace', 'hammer'].includes(G.weapon) && G.renderer) G.renderer.spawnSwing(G.id);
   send({ t: 'attack', yaw: G.yaw });
   pulseCrosshair();
 }
@@ -549,7 +550,7 @@ function frame(now) {
   aimYaw();
   if (G.me) G.me.draw = G.drawStart === null ? null : Math.min(1, (now - G.drawStart) / 1000);
   if (G.attacking && !G.chatOpen) {
-    if (['sword', 'axe', 'mace'].includes(G.weapon)) tryAttack();
+    if (['sword', 'axe', 'mace', 'hammer'].includes(G.weapon)) tryAttack();
     if (G.weapon === 'gun') fireGun();
   }
 

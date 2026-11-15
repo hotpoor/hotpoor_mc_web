@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=18';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=31';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=22';
 
@@ -132,7 +132,7 @@ export class Renderer3D {
     const right = createArm(-.43);
     const left = createArm(.43);
     const weapons = {};
-    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace']) {
+    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer']) {
       const weapon = makeWeapon(kind, overlay);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
@@ -195,6 +195,7 @@ export class Renderer3D {
       rig.weapons.sword.rotation.set(.28, 0, -.12);
       rig.weapons.axe.rotation.set(.28, 0, -.12);
       rig.weapons.mace.rotation.set(.28, 0, -.12);
+      rig.weapons.hammer.rotation.set(.28, 0, -.12);
     }
     rig.crystal.visible = carriesCrystal;
     if (carriesCrystal) {

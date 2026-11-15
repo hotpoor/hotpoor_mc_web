@@ -277,7 +277,7 @@ class Game:
                 self.wave(p, yaw, now)
         elif kind == "equip":
             weapon = data.get("weapon")
-            if weapon in ("sword", "bow", "beam", "rocket", "gun", "axe", "mace"):
+            if weapon in ("sword", "bow", "beam", "rocket", "gun", "axe", "mace", "hammer"):
                 if weapon != p.weapon:
                     p.draw_started = None
                 p.weapon = weapon
@@ -333,8 +333,8 @@ class Game:
 
     # ---------------------------------------------------------------- combat
     def attack(self, p, yaw, now):
-        damage = {"axe": 36, "mace": 42}.get(p.weapon, ATTACK_DAMAGE)
-        cooldown = {"axe": .85, "mace": 1.1}.get(p.weapon, ATTACK_CD)
+        damage = {"axe": 36, "mace": 42, "hammer": 55}.get(p.weapon, ATTACK_DAMAGE)
+        cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5}.get(p.weapon, ATTACK_CD)
         if not p.alive or now - p.last_attack < cooldown:
             return
         p.last_attack = now

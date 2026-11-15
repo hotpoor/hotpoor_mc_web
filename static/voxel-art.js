@@ -53,6 +53,11 @@ export function makeWeapon(kind, overlay = false) {
     part(.16, .65, .10, 0x3a9e9d, 0, .45);
     part(.085, .60, .102, 0xaaf4df, .022, .47);
     part(.095, .09, .10, 0x8df1d9, .025, .81);
+  } else if (kind === 'hammer') {
+    part(.105, .88, .105, 0x705039, 0, .22);
+    part(.59, .30, .30, 0x525d6a, 0, .68);
+    part(.15, .35, .35, 0xa2adb0, -.27, .68);
+    part(.15, .35, .35, 0xa2adb0, .27, .68);
   } else if (kind === 'mace') {
     part(.10, .69, .10, 0x704a30, 0, .19);
     part(.26, .43, .26, 0x4c4e54, 0, .59);
