@@ -144,7 +144,14 @@ export class Renderer3D {
     charge.position.set(0, -.5, .59);
     charge.renderOrder = 999;
     parent.add(charge);
-    const rig = { right, left, weapons, charge };
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(.22),
+      new THREE.MeshBasicMaterial({ color: 0x54ffee, depthTest: !overlay, depthWrite: !overlay, fog: !overlay }));
+    crystal.position.set(0, -.60, .19);
+    crystal.scale.y = 1.35;
+    crystal.renderOrder = overlay ? 999 : 0;
+    crystal.visible = false;
+    left.pivot.add(crystal);
+    const rig = { right, left, weapons, charge, crystal };
     this.applyArmSkin(rig, 'steve');
     return rig;
   }
@@ -163,7 +170,7 @@ export class Renderer3D {
     rig.skin = name;
   }
 
-  poseArms(rig, weapon, draw, swing, walk, recoil) {
+  poseArms(rig, weapon, draw, swing, walk, recoil, carriesCrystal = false) {
     const right = rig.right.pivot;
     const left = rig.left.pivot;
     const bow = weapon === 'bow';
@@ -188,6 +195,12 @@ export class Renderer3D {
       rig.weapons.sword.rotation.set(.28, 0, -.12);
       rig.weapons.axe.rotation.set(.28, 0, -.12);
       rig.weapons.mace.rotation.set(.28, 0, -.12);
+    }
+    rig.crystal.visible = carriesCrystal;
+    if (carriesCrystal) {
+      left.visible = true;
+      left.rotation.set(-1, 0, -.10);
+      rig.crystal.rotation.y = this.time * 1.8;
     }
   }
 
@@ -581,7 +594,7 @@ export class Renderer3D {
       } else {
         ud.swing.visible = false;
       }
-      this.poseArms(ud.rig, p.weapon, p.draw ?? null, swingPose, sw, ud.bowKick);
+      this.poseArms(ud.rig, p.weapon, p.draw ?? null, swingPose, sw, ud.bowKick, p.carriesCrystal);
       if (p.invuln && !selfHidden) g.visible = Math.floor(this.time * 9) % 2 === 0;
     }
     for (const [id, g] of this.meshes) {
@@ -685,7 +698,7 @@ export class Renderer3D {
     if (this.viewModel.visible) {
       const swing = Math.sin(Math.PI * this.swingSelf / .24);
       this.applyArmSkin(this.viewRig, me.skin || 'steve');
-      this.poseArms(this.viewRig, me.weapon, me.draw ?? null, swing, 0, this.bowKick);
+      this.poseArms(this.viewRig, me.weapon, me.draw ?? null, swing, 0, this.bowKick, me.carriesCrystal);
     }
   }
 
