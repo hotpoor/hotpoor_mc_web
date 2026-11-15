@@ -751,7 +751,29 @@ export class Renderer3D {
         this.scene.add(mesh);
         this.objectives.set(obj.id, mesh);
       }
-      mesh.visible = obj.hp > 0;
+      mesh.visible = obj.kind === 'ore' || obj.hp > 0;
+      if (obj.kind === 'ore') {
+        mesh.children[0].visible = obj.hp > 0;
+        const text = obj.hp ? '' : obj.cooldown > 0 ? obj.cooldown + ' 秒刷新' : '水晶已搬走';
+        if (mesh.userData.statusText !== text) {
+          const old = mesh.userData.status;
+          if (old) {
+            mesh.remove(old);
+            old.material.map.dispose();
+            old.material.dispose();
+          }
+          const status = text ? labelSprite(text, '#70e5db', 320, 100, 42) : null;
+          if (status) {
+            status.position.y = 1.12;
+            status.scale.set(2.45, .77, 1);
+            status.material.depthTest = true;
+            status.material.depthWrite = false;
+            mesh.add(status);
+          }
+          mesh.userData.status = status;
+          mesh.userData.statusText = text;
+        }
+      }
       if (obj.kind === 'ore' || obj.kind === 'dropped_crystal') mesh.children[0].rotation.y = this.time * 1.6;
       if (obj.kind === 'crystal') {
         mesh.children[0].rotation.y = this.time * 1.3;

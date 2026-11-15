@@ -66,6 +66,10 @@ export class Renderer2D {
     };
   }
 
+  syncObjectives(objects) {
+    this.oreSites = objects.filter(obj => obj.kind === 'ore');
+  }
+
   project(x, y, z) {
     const p = this.toScreen(x, z);
     const r = this.canvas.getBoundingClientRect();
@@ -123,6 +127,18 @@ export class Renderer2D {
       ctx.fillRect(p.x - half, p.y - half, s, s * 0.35);
       ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
       ctx.strokeRect(p.x - half, p.y - half, s, s);
+    }
+
+    for (const ore of this.oreSites || []) {
+      const p = this.toScreen(ore.x, ore.z);
+      ctx.fillStyle = ore.hp ? '#54ffee' : '#41747a';
+      ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+      if (!ore.hp) {
+        ctx.font = '600 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#d5fffb';
+        ctx.fillText(ore.cooldown > 0 ? ore.cooldown + ' 秒刷新' : '水晶已搬走', p.x, p.y - 7);
+      }
     }
 
     for (const sw of this.swings) {
