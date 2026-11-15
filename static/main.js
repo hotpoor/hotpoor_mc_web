@@ -503,21 +503,40 @@ function equip(weapon) {
 function updateForge(me) {
   const panel = $('forge-panel');
   panel.classList.toggle('hidden', !me.forgeNear || !me.alive);
-  $('syllable-status').textContent = me.syllable ? '携带 ' + me.syllable + ' · 到法阵按 E 存入'
-    : '法阵已存 · ' + (me.syllables?.join(' · ') || '无');
+  const label = id => G.world.materials?.[id] || id;
+  $('syllable-status').textContent = me.syllable ? '携带 ' + label(me.syllable) + ' · 到法阵按 E 存入'
+    : '法阵已存 · ' + (me.syllables?.map(label).join(' / ') || '无');
   const key = JSON.stringify([me.syllables, me.weapons]);
   if (!me.forgeNear || panel.dataset.inventory === key) return;
   panel.dataset.inventory = key;
   const recipes = $('forge-recipes');
   recipes.replaceChildren();
-  for (const [weapon, [first, second, lifetime]] of Object.entries(G.world.recipes || {})) {
-    const button = document.createElement('button');
-    button.className = 'view-btn';
-    button.textContent = WEAPON_NAMES[weapon] + ' · ' + first + ' + ' + second;
-    button.disabled = !!me.weapons?.[weapon] || !me.syllables?.includes(first) || !me.syllables?.includes(second);
-    button.title = lifetime < 0 ? '无限使用' : lifetime + ' 次';
-    button.onclick = () => send({ t: 'craft', weapon });
-    recipes.append(button);
+  for (const [weapon, recipe] of Object.entries(G.world.recipes || {})) {
+    const heading = document.createElement('div');
+    heading.className = 'hud-status';
+    heading.textContent = WEAPON_NAMES[weapon];
+    recipes.append(heading);
+    for (const mode of ['whole', 'split']) {
+      const button = document.createElement('button');
+      button.className = 'view-btn';
+      const required = recipe[mode];
+      const uses = recipe.uses < 0 ? '无限' : (mode === 'whole' ? Math.floor(recipe.uses / 2) : recipe.uses) + ' 次';
+      const remaining = [...(me.syllables || [])];
+      const ready = required.every(material => {
+        const index = remaining.indexOf(material);
+        if (index < 0) return false;
+        remaining.splice(index, 1);
+        return true;
+      });
+      button.textContent = (mode === 'whole' ? '整音节' : '声母＋韵母') + ' · ' + uses;
+      const materials = document.createElement('small');
+      materials.style.display = 'block';
+      materials.textContent = required.map(label).join(' ＋ ');
+      button.append(materials);
+      button.disabled = !!me.weapons?.[weapon] || !ready;
+      button.onclick = () => send({ t: 'craft', weapon, mode });
+      recipes.append(button);
+    }
   }
 }
 

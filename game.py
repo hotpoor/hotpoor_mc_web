@@ -97,6 +97,31 @@ RECIPES = {
     "hammer": ("zhòng", "chuí", 10),
 }
 
+PINYIN = {
+    "bǎo": ("宝", "b", "ǎo"), "jiàn": ("剑 / 箭", "j", "iàn"),
+    "gōng": ("弓", "g", "ōng"), "guī": ("龟", "g", "uī"),
+    "pài": ("派", "p", "ài"), "huǒ": ("火", "h", "uǒ"),
+    "jī": ("机", "j", "ī"), "qiāng": ("枪", "q", "iāng"),
+    "zhàn": ("战", "zh", "àn"), "fǔ": ("斧", "f", "ǔ"),
+    "láng": ("狼", "l", "áng"), "yá": ("牙", "y", "á"),
+    "zhòng": ("重", "zh", "òng"), "chuí": ("锤", "ch", "uí"),
+}
+
+MATERIALS = {}
+for sound, (hanzi, initial, final) in PINYIN.items():
+    # Spellings such as yá use y as the written syllable onset.
+    MATERIALS["whole:" + sound] = f"{hanzi} · {sound}"
+    MATERIALS["initial:" + initial] = f"声母 · {initial}"
+    MATERIALS["final:" + final] = f"韵母 · {final}"
+
+
+def recipe_materials(sounds, split):
+    if not split:
+        return ["whole:" + sound for sound in sounds]
+    return [part for sound in sounds
+            for part in ("initial:" + PINYIN[sound][1], "final:" + PINYIN[sound][2])]
+
+
 SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot")
 
 
@@ -139,22 +164,27 @@ class Game:
             if not collides(x, z, self.blocks):
                 self.objects.append({"id": f"ore-{x}-{z}", "kind": "ore", "x": x, "z": z,
                                      "hp": 1, "max_hp": 1, "ready": 0})
-        fields = ((-14,-10), (-7,-13), (7,-13), (14,-10), (-14,10), (-7,13), (7,13), (14,10),
-                  (-8,-5), (-5,-8), (5,-8), (8,-5), (-8,5), (-5,8), (5,8), (8,5))
-        letters = list(dict.fromkeys(letter for recipe in RECIPES.values() for letter in recipe[:2]))
-        occupied = [(obj["x"], obj["z"]) for obj in self.objects]
-        for i, ((x, z), letter) in enumerate(zip(fields, letters)):
-            x, z = next((x + dx, z + dz) for dx, dz in ((0,0), (1,0), (-1,0), (0,1), (0,-1), (2,0), (0,2), (-2,0), (0,-2))
-                        if not collides(x + dx, z + dz, self.blocks)
-                        and all(math.hypot(x + dx - ox, z + dz - oz) >= 2 for ox, oz in occupied))
-            occupied.append((x,z))
-            self.objects.append({"id": f"syllable-{i}", "kind": "syllable", "text": letter,
-                                 "x": x, "z": z, "hp": 1, "max_hp": 1, "ready": 0})
+        fields = sorted(((x, z) for x in range(-20, 21, 4) for z in range(-20, 21, 4)
+                         if not collides(x, z, self.blocks)
+                         and all(math.hypot(x - obj["x"], z - obj["z"]) >= 2 for obj in self.objects)),
+                        key=lambda pos: ((pos[0] * 73 + pos[1] * 109) % 127, pos))
+        for i, ((x, z), (material, label)) in enumerate(zip(fields, MATERIALS.items())):
+            self.objects.append({"id": f"syllable-{i}", "kind": "syllable", "text": label,
+                                 "material": material, "x": x, "z": z, "hp": 1, "max_hp": 1, "ready": 0})
         for x in (-27, 27):
             for z in (-27, 27):
                 self.objects.append({"id": f"forge-{x}-{z}", "kind": "forge", "x": x, "z": z,
                                      "hp": 1, "max_hp": 1, "ready": 0})
-        self.world["recipes"] = RECIPES
+        self.world["materials"] = MATERIALS
+        self.world["recipes"] = {
+            weapon: {
+                "word": ("火箭" if weapon == "rocket" else "宝剑") if weapon in ("rocket", "sword")
+                        else "".join(PINYIN[sound][0].split(" / ")[-1] for sound in sounds),
+                "whole": recipe_materials(sounds, False), "split": recipe_materials(sounds, True),
+                "uses": uses,
+            }
+            for weapon, (*sounds, uses) in RECIPES.items()
+        }
         self.arrows = {}
         self.next_arrow_id = 0
         self.players = {}                 # id -> Player
@@ -266,7 +296,7 @@ class Game:
             self.interact(p, now)
             return
         if kind == "craft":
-            self.craft(p, data.get("weapon"))
+            self.craft(p, data.get("weapon"), data.get("mode"))
             return
         if kind == "skin":
             skin = data.get("skin")
@@ -387,15 +417,19 @@ class Game:
         return any(obj["kind"] == "forge" and math.hypot(p.x - obj["x"], p.z - obj["z"]) <= 3
                    for obj in self.objects)
 
-    def craft(self, p, weapon):
-        if not isinstance(weapon, str) or weapon not in RECIPES or not p.alive or not self.forge_near(p):
+    def craft(self, p, weapon, mode):
+        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in ("whole", "split")
+                or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0)):
             return
-        first, second, uses = RECIPES[weapon]
-        if first not in p.syllables or second not in p.syllables or p.weapons.get(weapon, 0):
-            return
-        p.syllables.remove(first)
-        p.syllables.remove(second)
-        p.weapons[weapon] = uses
+        recipe = self.world["recipes"][weapon]
+        remaining = p.syllables.copy()
+        for material in recipe[mode]:
+            if material not in remaining:
+                return
+            remaining.remove(material)
+        p.syllables = remaining
+        uses = recipe["uses"]
+        p.weapons[weapon] = uses // 2 if mode == "whole" and uses > 0 else uses
         p.weapon = weapon
         p.draw_started = None
 
@@ -474,7 +508,7 @@ class Game:
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
             if ore["kind"] == "syllable":
-                player.syllable = ore["text"]
+                player.syllable = ore["material"]
                 ore["hp"] = 0
                 ore["ready"] = now + 10
                 return

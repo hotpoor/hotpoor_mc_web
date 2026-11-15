@@ -743,8 +743,8 @@ export class Renderer3D {
             new THREE.MeshBasicMaterial({ color: forge ? 0xb885ff : 0xffdd75, side: THREE.DoubleSide }));
           ring.rotation.x = -Math.PI / 2;
           ring.position.y = .04;
-          const label = labelSprite(forge ? '拼音法阵 · E' : obj.text, forge ? '#b885ff' : '#ffdd75', 320, 120, 58);
-          label.scale.set(forge ? 3.4 : 1.45, .7, 1);
+          const label = labelSprite(forge ? '拼音法阵 · E' : obj.text, forge ? '#b885ff' : '#ffdd75', 448, 120, 49);
+          label.scale.set(forge ? 3.4 : 2.75, .7, 1);
           label.position.y = forge ? 1.3 : .8;
           label.material.depthTest = true;
           mesh.add(ring, label);
