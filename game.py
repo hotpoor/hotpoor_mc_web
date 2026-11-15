@@ -60,7 +60,7 @@ class Player:
     last_attack: float = 0.0
     weapon: str = "sword"
     skin: str = "steve"
-    carries_crystal: bool = False
+    crystal_source: str | None = None
     draw_started: float | None = None
     jump: float = 0.0
     jump_speed: float = 0.0
@@ -150,6 +150,7 @@ class Game:
         p = self.players.pop(pid, None)
         if not p:
             return
+        self.drop_crystal(p, time.monotonic())
         self.db.upsert_player(p)
         self.db.add_history("leave", p.name, team=p.team, detail="离开世界")
         self.emit({"k": "leave", "id": p.id, "name": p.name, "team": p.team})
@@ -374,7 +375,7 @@ class Game:
                     and abs(player.jump - obj.get("y", 0)) <= 1.2
                     and not self.blocked(player.x, player.z, obj["x"], obj["z"]))
 
-        if player.carries_crystal:
+        if player.crystal_source:
             crystal = next(obj for obj in self.objects if obj["id"] == player.team)
             if 0 < crystal["hp"] < crystal["max_hp"] and nearby(crystal, 5):
                 amount = min(100, crystal["max_hp"] - crystal["hp"])
@@ -383,7 +384,8 @@ class Game:
                            "start": [player.x, player.jump + 1.1, player.z],
                            "end": [crystal["x"], 1.4, crystal["z"]],
                            "hp": crystal["hp"], "max_hp": crystal["max_hp"]})
-                player.carries_crystal = False
+                self.release_crystal_source(player.crystal_source, now)
+                player.crystal_source = None
             else:
                 self.drop_crystal(player, now)
             return
@@ -391,21 +393,27 @@ class Game:
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
             if ore["kind"] == "dropped_crystal":
+                player.crystal_source = ore["source"]
                 self.objects.remove(ore)
             else:
                 ore["hp"] = 0
-                ore["ready"] = now + 10
-            player.carries_crystal = True
+                ore["ready"] = None
+                player.crystal_source = ore["id"]
+
+    def release_crystal_source(self, source, now):
+        ore = next(obj for obj in self.objects if obj["id"] == source)
+        ore["ready"] = now + 10
 
     def drop_crystal(self, player, now):
-        if not player.carries_crystal:
+        source = player.crystal_source
+        if not source:
             return
-        player.carries_crystal = False
+        player.crystal_source = None
         floor = max((b["h"] for b in self.blocks if b["h"] <= player.jump
                      and abs(player.x - b["x"]) < .5 and abs(player.z - b["z"]) < .5), default=0)
         self.objects.append({"id": "drop-" + uuid.uuid4().hex, "kind": "dropped_crystal",
                              "x": player.x, "y": floor, "z": player.z,
-                             "hp": 1, "max_hp": 1, "ready": 0, "expires": now + 60})
+                             "hp": 1, "max_hp": 1, "ready": 0, "source": source, "expires": now + 60})
 
     def targets(self, player):
         return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb") and obj.get("team") != player.team]
@@ -670,9 +678,12 @@ class Game:
         self.last_tick = now
         self.tick_no += 1
 
-        self.objects[:] = [obj for obj in self.objects if now < obj.get("expires", math.inf)]
+        for obj in self.objects[:]:
+            if now >= obj.get("expires", math.inf):
+                self.release_crystal_source(obj["source"], now)
+                self.objects.remove(obj)
         for obj in self.objects:
-            if not obj["hp"] and now >= obj["ready"]:
+            if not obj["hp"] and obj["ready"] is not None and now >= obj["ready"]:
                 obj["hp"] = obj["max_hp"]
         previous = {p.id: (p.x, p.z) for p in self.players.values() if p.alive}
         for p in list(self.players.values()):
@@ -739,7 +750,7 @@ class Game:
                 "id": p.id, "name": p.name, "team": p.team,
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
-                "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "carries_crystal": p.carries_crystal, "jump": round(p.jump, 3),
+                "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
                 "beam_cd": round(max(0, p.beam_ready - now), 1),
                 "rocket_cd": round(max(0, p.rocket_ready - now), 1),
@@ -763,7 +774,7 @@ class Game:
             "arrows": [{"id": arrow_id, "position": arrow["position"], "velocity": arrow["velocity"], "rocket": arrow["rocket"]}
                        for arrow_id, arrow in self.arrows.items()],
             "team_score": self.team_score,
-            "objects": [{**obj, "cooldown": max(0, math.ceil(obj["ready"] - now))} for obj in self.objects],
+            "objects": [{**obj, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }
 
