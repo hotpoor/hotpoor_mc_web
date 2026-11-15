@@ -87,15 +87,16 @@ class Player:
 
 ARROW_GRAVITY = 18.0
 RECIPES = {
-    "sword": ("bǎo", "jiàn", 50),
-    "bow": ("gōng", "jiàn", 50),
-    "beam": ("guī", "pài", -1),
-    "rocket": ("huǒ", "jiàn", "tǒng", -1),
-    "gun": ("jī", "qiāng", 50),
-    "axe": ("zhàn", "fǔ", 30),
-    "mace": ("láng", "yá", 20),
-    "hammer": ("zhòng", "chuí", 10),
+    "sword": ("宝剑", ("bǎo", "jiàn")),
+    "bow": ("弓箭", ("gōng", "jiàn")),
+    "beam": ("龟派气功", ("guī", "pài")),
+    "rocket": ("火箭筒", ("huǒ", "jiàn", "tǒng")),
+    "gun": ("机关枪", ("jī", "qiāng")),
+    "axe": ("斧子", ("zhàn", "fǔ")),
+    "mace": ("狼牙棒", ("láng", "yá")),
+    "hammer": ("重锤", ("zhòng", "chuí")),
 }
+WEAPON_USES = {"pickup": 10, "text": 15, "whole": 20, "split": 30}
 
 PINYIN = {
     "bǎo": ("宝", "b", "ǎo"), "jiàn": ("剑 / 箭", "j", "iàn"),
@@ -107,7 +108,7 @@ PINYIN = {
     "zhòng": ("重", "zh", "òng"), "chuí": ("锤", "ch", "uí"),
 }
 
-MATERIALS = {}
+MATERIALS = {"text:" + weapon: word for weapon, (word, _) in RECIPES.items()}
 for sound, (hanzi, initial, final) in PINYIN.items():
     # Spellings such as yá use y as the written syllable onset.
     MATERIALS["whole:" + sound] = f"{hanzi} · {sound}"
@@ -168,7 +169,14 @@ class Game:
                          if not collides(x, z, self.blocks)
                          and all(math.hypot(x - obj["x"], z - obj["z"]) >= 2 for obj in self.objects)),
                         key=lambda pos: ((pos[0] * 73 + pos[1] * 109) % 127, pos))
-        for i, ((x, z), (material, label)) in enumerate(zip(fields, MATERIALS.items())):
+        sites = iter(fields)
+        for weapon, (word, _) in RECIPES.items():
+            x, z = next(sites)
+            self.objects.append({"id": "weapon-" + weapon, "kind": "weapon_pickup",
+                                 "weapon": weapon, "text": word, "x": x, "z": z,
+                                 "hp": 1, "max_hp": 1, "ready": 0})
+        for i, (material, label) in enumerate(MATERIALS.items()):
+            x, z = next(sites)
             self.objects.append({"id": f"syllable-{i}", "kind": "syllable", "text": label,
                                  "material": material, "x": x, "z": z, "hp": 1, "max_hp": 1, "ready": 0})
         for x in (-27, 27):
@@ -182,14 +190,11 @@ class Game:
                                          "x": x + dx * inward_x, "z": z + dz * inward_z,
                                          "hp": MAX_HP * 2, "max_hp": MAX_HP * 2, "ready": 0})
         self.world["materials"] = MATERIALS
+        self.world["weapon_uses"] = WEAPON_USES
         self.world["recipes"] = {
-            weapon: {
-                "word": ("火箭筒" if weapon == "rocket" else "宝剑") if weapon in ("rocket", "sword")
-                        else "".join(PINYIN[sound][0].split(" / ")[-1] for sound in sounds),
-                "whole": recipe_materials(sounds, False), "split": recipe_materials(sounds, True),
-                "uses": uses,
-            }
-            for weapon, (*sounds, uses) in RECIPES.items()
+            weapon: {"word": word, "text": ["text:" + weapon],
+                     "whole": recipe_materials(sounds, False), "split": recipe_materials(sounds, True)}
+            for weapon, (word, sounds) in RECIPES.items()
         }
         self.arrows = {}
         self.next_arrow_id = 0
@@ -379,11 +384,13 @@ class Game:
                     self.wave(p, yaw, now, gun=True)
             elif p.weapon == "rocket":
                 if p.alive and now >= p.rocket_ready:
+                    self.spend_weapon(p)
                     p.rocket_ready = now + 10
                     self.shoot(p, yaw, 0, now, 1, rocket=True)
             elif p.weapon == "beam":
                 started, p.draw_started = p.draw_started, None
-                if started is not None and now - started >= 1:
+                if started is not None and now - started >= 1 and now >= p.beam_ready:
+                    self.spend_weapon(p)
                     self.wave(p, yaw, now, beam=True)
             elif p.weapon == "bow":
                 started, p.draw_started = p.draw_started, None
@@ -424,8 +431,8 @@ class Game:
                    for obj in self.objects)
 
     def craft(self, p, weapon, mode):
-        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in ("whole", "split")
-                or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0)):
+        if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in ("text", "whole", "split")
+                or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0) >= WEAPON_USES[mode]):
             return
         recipe = self.world["recipes"][weapon]
         remaining = p.syllables.copy()
@@ -434,8 +441,7 @@ class Game:
                 return
             remaining.remove(material)
         p.syllables = remaining
-        uses = recipe["uses"]
-        p.weapons[weapon] = uses // 2 if mode == "whole" and uses > 0 else uses
+        p.weapons[weapon] = WEAPON_USES[mode]
         p.weapon = weapon
         p.draw_started = None
 
@@ -515,9 +521,19 @@ class Game:
             else:
                 self.drop_crystal(player, now)
             return
-        available = [obj for obj in self.objects if obj["kind"] in ("ore", "dropped_crystal", "syllable") and obj["hp"] and nearby(obj)]
+        available = [obj for obj in self.objects
+                     if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal", "syllable")
+                         or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < WEAPON_USES["pickup"]))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
+            if ore["kind"] == "weapon_pickup":
+                weapon = ore["weapon"]
+                player.weapons[weapon] = WEAPON_USES["pickup"]
+                player.weapon = weapon
+                player.draw_started = None
+                ore["hp"] = 0
+                ore["ready"] = now + 10
+                return
             if ore["kind"] == "syllable":
                 player.syllable = ore["material"]
                 ore["hp"] = 0

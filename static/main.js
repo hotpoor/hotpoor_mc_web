@@ -516,11 +516,11 @@ function updateForge(me) {
     heading.className = 'hud-status';
     heading.textContent = WEAPON_NAMES[weapon];
     recipes.append(heading);
-    for (const mode of ['whole', 'split']) {
+    for (const mode of ['text', 'whole', 'split']) {
       const button = document.createElement('button');
       button.className = 'view-btn';
       const required = recipe[mode];
-      const uses = recipe.uses < 0 ? '无限' : (mode === 'whole' ? Math.floor(recipe.uses / 2) : recipe.uses) + ' 次';
+      const uses = G.world.weapon_uses[mode];
       const remaining = [...(me.syllables || [])];
       const ready = required.every(material => {
         const index = remaining.indexOf(material);
@@ -528,12 +528,12 @@ function updateForge(me) {
         remaining.splice(index, 1);
         return true;
       });
-      button.textContent = (mode === 'whole' ? '整音节' : '声母＋韵母') + ' · ' + uses;
+      button.textContent = ({ text: '整词汉字', whole: '单字拼音', split: '声母＋韵母' })[mode] + ' · ' + uses + ' 次';
       const materials = document.createElement('small');
       materials.style.display = 'block';
       materials.textContent = required.map(label).join(' ＋ ');
       button.append(materials);
-      button.disabled = !!me.weapons?.[weapon] || !ready;
+      button.disabled = (me.weapons?.[weapon] || 0) >= uses || !ready;
       button.onclick = () => send({ t: 'craft', weapon, mode });
       recipes.append(button);
     }

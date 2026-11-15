@@ -67,7 +67,7 @@ export class Renderer2D {
   }
 
   syncObjectives(objects) {
-    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy'].includes(obj.kind));
+    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup'].includes(obj.kind));
   }
 
   project(x, y, z) {

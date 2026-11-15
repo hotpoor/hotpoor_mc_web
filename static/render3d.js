@@ -745,6 +745,17 @@ export class Renderer3D {
           mesh.add(bar);
           mesh.userData.healthBar = { canvas, map };
 
+        } else if (obj.kind === 'weapon_pickup') {
+          const model = obj.weapon === 'beam'
+            ? new THREE.Mesh(new THREE.OctahedronGeometry(.28), new THREE.MeshBasicMaterial({ color: 0x66ddff }))
+            : makeWeapon(obj.weapon);
+          model.position.y = .8;
+          mesh.add(model);
+          const label = labelSprite(obj.text + ' · E', '#ffe78b', 320, 100, 40);
+          label.position.y = 2;
+          label.scale.set(2.4, .75, 1);
+          label.material.depthTest = true;
+          mesh.add(label);
         } else if (obj.kind === 'syllable' || obj.kind === 'forge') {
           const forge = obj.kind === 'forge';
           const ring = new THREE.Mesh(new THREE.RingGeometry(forge ? 1.6 : .23, forge ? 2 : .35, 36),
@@ -772,6 +783,7 @@ export class Renderer3D {
         this.objectives.set(obj.id, mesh);
       }
       mesh.visible = obj.kind === 'ore' || obj.hp > 0;
+      if (obj.kind === 'weapon_pickup') mesh.children[0].rotation.y = this.time * .55;
       if (obj.kind === 'ore') {
         mesh.children[0].visible = obj.hp > 0;
         const text = obj.hp ? '' : obj.cooldown > 0 ? obj.cooldown + ' 秒刷新' : '水晶已搬走';
