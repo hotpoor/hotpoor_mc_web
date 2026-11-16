@@ -328,6 +328,19 @@ class Game:
         if kind == "interact":
             self.interact(p, now)
             return
+        if kind == "drop_weapon":
+            weapon = p.weapon
+            if p.alive and p.weapons.get(weapon, 0) > 0:
+                uses = p.weapons.pop(weapon)
+                p.weapon = ""
+                p.draw_started = None
+                floor = max((b["h"] for b in self.blocks if b["h"] <= p.jump
+                             and abs(p.x - b["x"]) < .5 and abs(p.z - b["z"]) < .5), default=0)
+                self.objects.append({"id": "drop-weapon-" + uuid.uuid4().hex, "kind": "weapon_pickup",
+                                     "weapon": weapon, "text": RECIPES[weapon][0], "uses": uses,
+                                     "x": p.x, "y": floor, "z": p.z,
+                                     "hp": 1, "max_hp": 1, "ready": 0, "expires": now + 60})
+            return
         if kind == "craft_modes":
             if now < p.next_settings_attempt:
                 self.send(ws, {"t": "settings_result", "ok": False, "message": "请稍后再试"})
@@ -571,16 +584,19 @@ class Game:
         available = [obj for obj in self.objects
                      if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
                          or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in self.craft_modes)
-                         or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < WEAPON_USES["pickup"]))]
+                         or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < obj.get("uses", WEAPON_USES["pickup"])))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
             if ore["kind"] == "weapon_pickup":
                 weapon = ore["weapon"]
-                player.weapons[weapon] = WEAPON_USES["pickup"]
+                player.weapons[weapon] = ore.get("uses", WEAPON_USES["pickup"])
                 player.weapon = weapon
                 player.draw_started = None
-                ore["hp"] = 0
-                ore["ready"] = now + 10
+                if "expires" in ore:
+                    self.objects.remove(ore)
+                else:
+                    ore["hp"] = 0
+                    ore["ready"] = now + 10
                 return
             if ore["kind"] == "syllable":
                 player.syllable = ore["material"]
@@ -876,7 +892,8 @@ class Game:
 
         for obj in self.objects[:]:
             if now >= obj.get("expires", math.inf):
-                self.release_crystal_source(obj["source"], now)
+                if obj["kind"] == "dropped_crystal":
+                    self.release_crystal_source(obj["source"], now)
                 self.objects.remove(obj)
         for obj in self.objects:
             if not obj["hp"] and obj["ready"] is not None and now >= obj["ready"]:

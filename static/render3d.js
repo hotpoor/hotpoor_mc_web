@@ -717,11 +717,11 @@ export class Renderer3D {
     for (const [id, mesh] of this.objectives) {
       if (active.has(id)) continue;
       this.scene.remove(mesh);
-      for (const child of mesh.children) {
+      mesh.traverse(child => {
         child.geometry?.dispose();
-        child.material.map?.dispose();
-        child.material.dispose();
-      }
+        child.material?.map?.dispose();
+        child.material?.dispose();
+      });
       this.objectives.delete(id);
     }
     for (const obj of objects) {

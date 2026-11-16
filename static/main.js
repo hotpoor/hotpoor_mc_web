@@ -331,6 +331,11 @@ window.addEventListener('keydown', e => {
     equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace', 8: 'hammer', 9: 'dual', 0: 'spear', '[': 'blade', ']': 'halberd' }[k]);
     return;
   }
+  if (k === 'g' && !e.repeat) {
+    e.preventDefault();
+    dropWeapon();
+    return;
+  }
   if (k === 'e' && !e.repeat) { e.preventDefault(); interactCrystal(); return; }
   if (k === 'h' && !e.repeat) { e.preventDefault(); recallHome(); return; }
   if (k === 'q' && !e.repeat) { castWave(); return; }
@@ -518,6 +523,15 @@ function updateWeaponSlots(me) {
     slot.textContent = ('1234567890[]'[index]) + ' · ' + name + (uses ? ' · ' + uses : '');
   });
 }
+
+function dropWeapon() {
+  if (!G.me?.alive || !G.me.weapons?.[G.weapon] || G.chatOpen) return;
+  G.attacking = false;
+  cancelDraw();
+  send({ t: 'drop_weapon' });
+}
+
+$('drop-weapon').addEventListener('click', dropWeapon);
 
 function updateWeaponLabel() {
   $('weapon-toggle').textContent = G.weapon ? '武器 · ' + WEAPON_NAMES[G.weapon] : '武器 · 未装备';
@@ -781,6 +795,7 @@ function updateHud() {
   updateForge(me);
   updateWeaponSlots(me);
   const uses = me.weapons?.[G.weapon];
+  $('drop-weapon').disabled = !me.alive || !uses;
   $('weapon-life').textContent = uses === -1 ? '剩余次数 · 无限' : uses != null ? '剩余次数 · ' + uses : '';
   $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
