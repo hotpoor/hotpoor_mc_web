@@ -2,9 +2,9 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=31';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=41';
 
-import { makeSkin, SKIN_NAMES } from './player-skins.js?v=22';
+import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
 
 const TEAM_HEX = { red: 0xef4f4f, blue: 0x4c86f0 };
 const ARC = Math.PI * 65 / 180;
@@ -132,7 +132,7 @@ export class Renderer3D {
     const right = createArm(-.43);
     const left = createArm(.43);
     const weapons = {};
-    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer']) {
+    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd']) {
       const weapon = makeWeapon(kind, overlay);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
@@ -151,7 +151,11 @@ export class Renderer3D {
     crystal.renderOrder = overlay ? 999 : 0;
     crystal.visible = false;
     left.pivot.add(crystal);
-    const rig = { right, left, weapons, charge, crystal };
+    const secondSword = makeWeapon('dual', overlay);
+    secondSword.position.set(0, -.58, .12);
+    secondSword.visible = false;
+    left.pivot.add(secondSword);
+    const rig = { right, left, weapons, charge, crystal, secondSword };
     this.applyArmSkin(rig, 'steve');
     return rig;
   }
@@ -196,6 +200,11 @@ export class Renderer3D {
       rig.weapons.axe.rotation.set(.28, 0, -.12);
       rig.weapons.mace.rotation.set(.28, 0, -.12);
       rig.weapons.hammer.rotation.set(.28, 0, -.12);
+    }
+    rig.secondSword.visible = weapon === 'dual' && !carriesCrystal;
+    if (rig.secondSword.visible) {
+      left.visible = true;
+      left.rotation.x = -.38 - swing;
     }
     rig.crystal.visible = carriesCrystal;
     if (carriesCrystal) {

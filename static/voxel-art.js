@@ -53,6 +53,23 @@ export function makeWeapon(kind, overlay = false) {
     part(.16, .65, .10, 0x3a9e9d, 0, .45);
     part(.085, .60, .102, 0xaaf4df, .022, .47);
     part(.095, .09, .10, 0x8df1d9, .025, .81);
+  } else if (kind === 'dual') {
+    part(.095, .31, .10, 0x593a32, 0, .01);
+    part(.31, .08, .13, 0xe9bb68, 0, .17);
+    part(.14, .62, .09, 0xb8d0df, 0, .50);
+    part(.085, .12, .085, 0xe2eef4, 0, .86);
+  } else if (['spear', 'blade', 'halberd'].includes(kind)) {
+    part(.095, 1.21, .095, 0x704b36, 0, .36);
+    part(.13, .12, .13, 0xcb9e53, 0, .89);
+    part(.115, .34, .10, 0xd2dee1, 0, 1.09);
+    if (kind === 'spear') {
+      part(.10, .22, .09, 0xa9c3ca, .055, 1.23).rotation.z = -.43;
+      part(.085, .20, .085, 0xd2dee1, .055, 1.38).rotation.z = .4;
+    } else {
+      part(.24, .26, .12, kind === 'blade' ? 0x36a587 : 0xa43f4d, .14, 1.05);
+      part(.105, .38, .10, 0xcbdadd, .25, 1.12).rotation.z = -.25;
+      if (kind === 'halberd') part(.10, .31, .10, 0xcbdadd, -.23, 1.07).rotation.z = .35;
+    }
   } else if (kind === 'hammer') {
     part(.105, .88, .105, 0x705039, 0, .22);
     part(.59, .30, .30, 0x525d6a, 0, .68);

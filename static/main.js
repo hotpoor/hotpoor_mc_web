@@ -1,4 +1,4 @@
-import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=22';
+import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=41';
 
 // mc-web client: networking, input, prediction, HUD and panels.
 const BUILD = new URL(import.meta.url).searchParams.get('v');
@@ -145,7 +145,7 @@ async function initRenderer() {
       if (G.me?.alive && !G.me.rocketCd) send({ t: 'attack', yaw: G.yaw });
     } else if (G.weapon === 'gun') {
       fireGun();
-    } else if (!['sword', 'axe', 'mace', 'hammer'].includes(G.weapon)) {
+    } else if (!['sword', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd'].includes(G.weapon)) {
       const now = performance.now();
       if (G.me?.alive && G.drawStart === null && (G.weapon === 'beam' ? !G.me.beamCd : now - G.lastAttack >= 470)) {
         G.drawStart = now;
@@ -327,8 +327,8 @@ window.addEventListener('keydown', e => {
   }
   if (k === 'escape' && G.chatOpen) { closeChat(); return; }
   if (G.chatOpen || e.target === $('chat-input')) return;
-  if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(k) && G.joined && !e.repeat) {
-    equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace', 8: 'hammer' }[k]);
+  if (['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '[', ']'].includes(k) && G.joined && !e.repeat) {
+    equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace', 8: 'hammer', 9: 'dual', 0: 'spear', '[': 'blade', ']': 'halberd' }[k]);
     return;
   }
   if (k === 'e' && !e.repeat) { e.preventDefault(); interactCrystal(); return; }
@@ -495,14 +495,14 @@ function cancelDraw() {
 }
 
 const WEAPON_NAMES = { sword: '宝剑', bow: '弓箭', beam: '龟派气功', rocket: '火箭筒',
-  gun: '机关枪', axe: '斧子', mace: '狼牙棒', hammer: '重锤' };
+  gun: '机关枪', axe: '斧子', mace: '狼牙棒', hammer: '重锤', dual: '双股剑', spear: '丈八蛇矛', blade: '青龙偃月刀', halberd: '方天画戟' };
 
 const weaponSlots = Object.entries(WEAPON_NAMES);
 const slotButtons = weaponSlots.map(([weapon, name], index) => {
   const slot = document.createElement('button');
   slot.type = 'button';
   slot.className = 'view-btn';
-  slot.textContent = (index + 1) + ' · ' + name;
+  slot.textContent = ('1234567890[]'[index]) + ' · ' + name;
   slot.disabled = true;
   slot.onclick = () => equip(weapon);
   $('weapon-slots').append(slot);
@@ -515,7 +515,7 @@ function updateWeaponSlots(me) {
     const slot = slotButtons[index];
     slot.disabled = !uses;
     slot.setAttribute('aria-pressed', String(weapon === G.weapon));
-    slot.textContent = (index + 1) + ' · ' + name + (uses ? ' · ' + uses : '');
+    slot.textContent = ('1234567890[]'[index]) + ' · ' + name + (uses ? ' · ' + uses : '');
   });
 }
 
@@ -610,11 +610,11 @@ $('weapon-toggle').addEventListener('click', () => {
 
 function tryAttack() {
   const now = performance.now();
-  if (!G.me || !G.me.alive || !G.me.weapons?.[G.weapon] || now - G.lastAttack < ({ axe: 850, mace: 1100, hammer: 1500 }[G.weapon] || 500)) return;
+  if (!G.me || !G.me.alive || !G.me.weapons?.[G.weapon] || now - G.lastAttack < ({ axe: 850, mace: 1100, hammer: 1500, dual: 700, spear: 1000, blade: 1200, halberd: 1350 }[G.weapon] || 500)) return;
   G.lastAttack = now;
   // Play our own swing immediately so the weapon follows the click without
   // waiting a round-trip; other players' swings come from the server event.
-  if (['sword', 'axe', 'mace', 'hammer'].includes(G.weapon) && G.renderer) G.renderer.spawnSwing(G.id);
+  if (['sword', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd'].includes(G.weapon) && G.renderer) G.renderer.spawnSwing(G.id);
   send({ t: 'attack', yaw: G.yaw });
   pulseCrosshair();
 }
@@ -679,7 +679,7 @@ function frame(now) {
   aimYaw();
   if (G.me) G.me.draw = G.drawStart === null ? null : Math.min(1, (now - G.drawStart) / 1000);
   if (G.attacking && !G.chatOpen) {
-    if (['sword', 'axe', 'mace', 'hammer'].includes(G.weapon)) tryAttack();
+    if (['sword', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd'].includes(G.weapon)) tryAttack();
     if (G.weapon === 'gun') fireGun();
   }
 

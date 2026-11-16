@@ -99,6 +99,10 @@ RECIPES = {
     "axe": ("斧子", ("zhàn", "fǔ")),
     "mace": ("狼牙棒", ("láng", "yá")),
     "hammer": ("重锤", ("zhòng", "chuí")),
+    "dual": ("双股剑", ('shuāng', 'gǔ', 'jiàn')),
+    "spear": ("丈八蛇矛", ('zhàng', 'bā', 'shé', 'máo')),
+    "blade": ("青龙偃月刀", ('qīng', 'lóng', 'yǎn', 'yuè', 'dāo')),
+    "halberd": ("方天画戟", ('fāng', 'tiān', 'huà', 'jǐ')),
 }
 WEAPON_USES = {"pickup": 10, "text": 15, "whole": 20, "split": 30}
 
@@ -110,6 +114,14 @@ PINYIN = {
     "zhàn": ("战", "zh", "àn"), "fǔ": ("斧", "f", "ǔ"),
     "láng": ("狼", "l", "áng"), "yá": ("牙", "y", "á"),
     "zhòng": ("重", "zh", "òng"), "chuí": ("锤", "ch", "uí"),
+    "shuāng": ("双", "sh", "uāng"), "gǔ": ("股", "g", "ǔ"),
+    "zhàng": ("丈", "zh", "àng"), "bā": ("八", "b", "ā"),
+    "shé": ("蛇", "sh", "é"), "máo": ("矛", "m", "áo"),
+    "qīng": ("青", "q", "īng"), "lóng": ("龙", "l", "óng"),
+    "yǎn": ("偃", "y", "ǎn"), "yuè": ("月", "y", "uè"),
+    "dāo": ("刀", "d", "āo"), "fāng": ("方", "f", "āng"),
+    "tiān": ("天", "t", "iān"), "huà": ("画", "h", "uà"),
+    "jǐ": ("戟", "j", "ǐ"),
 }
 
 MATERIALS = {"text:" + weapon: word for weapon, (word, _) in RECIPES.items()}
@@ -127,7 +139,7 @@ def recipe_materials(sounds, split):
             for part in ("initial:" + PINYIN[sound][1], "final:" + PINYIN[sound][2])]
 
 
-SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot")
+SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot", "liu-bei", "zhang-fei", "guan-yu", "lu-bu")
 
 
 def segment_box(start, delta, bounds):
@@ -431,7 +443,7 @@ class Game:
                         self.spend_weapon(p)
                         self.shoot(p, yaw, pitch, now, min(1.0, now - started))
             else:
-                cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5}.get(p.weapon, ATTACK_CD)
+                cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5, "dual": 0.7, "spear": 1, "blade": 1.2, "halberd": 1.35}.get(p.weapon, ATTACK_CD)
                 if now - p.last_attack >= cooldown and not p.slam_pending:
                     self.spend_weapon(p)
                     if p.weapon == "hammer" and not p.grounded:
@@ -489,8 +501,8 @@ class Game:
 
     # ---------------------------------------------------------------- combat
     def attack(self, p, yaw, now):
-        damage = {"axe": 36, "mace": 42, "hammer": 55}.get(p.weapon, ATTACK_DAMAGE)
-        cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5}.get(p.weapon, ATTACK_CD)
+        damage = {"axe": 36, "mace": 42, "hammer": 55, "dual": 38, "spear": 44, "blade": 49, "halberd": 52}.get(p.weapon, ATTACK_DAMAGE)
+        cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5, "dual": 0.7, "spear": 1, "blade": 1.2, "halberd": 1.35}.get(p.weapon, ATTACK_CD)
         if not p.alive or now - p.last_attack < cooldown:
             return
         p.last_attack = now

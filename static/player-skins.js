@@ -11,12 +11,32 @@ const alexFace = [
 
 export const SKIN_NAMES = {
   red: '纯红', blue: '纯蓝', steve: '史蒂夫', alex: '艾利克斯',
+  'liu-bei': '刘备',
+  'zhang-fei': '张飞',
+  'guan-yu': '关羽',
+  'lu-bu': '吕布',
   miner: '矿工', ranger: '游侠', robot: '机器人',
 };
 
 const EXTRA_SKINS = {
   red: { solid: '#e64448' },
   blue: { solid: '#3d72e7' },
+  'liu-bei': {
+    palette: { h: '#35423c', c: '#557f9c', d: '#372e39', l: '#46454b', b: '#29242a' },
+    face: ['hhhhhhhh', 'hhhhhhhh', 'hhsssshh', 'hssssssh', 'hsEssEsh', 'hssssssh', 'hbbbbbbh', 'ssbbbbss'],
+  },
+  'zhang-fei': {
+    palette: { h: '#292324', c: '#675284', d: '#372e39', l: '#46454b', b: '#29242a' },
+    face: ['hhhhhhhh', 'hhhhhhhh', 'hhsssshh', 'hssssssh', 'hsEssEsh', 'hssssssh', 'hbbbbbbh', 'ssbbbbss'],
+  },
+  'guan-yu': {
+    palette: { h: '#273b2c', c: '#397549', d: '#372e39', l: '#46454b', b: '#29242a' },
+    face: ['hhhhhhhh', 'hhhhhhhh', 'hhsssshh', 'hssssssh', 'hsGssGsh', 'hssssssh', 'hbbbbbbh', 'ssbbbbss'],
+  },
+  'lu-bu': {
+    palette: { h: '#491d30', c: '#963949', d: '#372e39', l: '#46454b', b: '#29242a' },
+    face: ['hhhhhhhh', 'hhhhhhhh', 'hhsssshh', 'hssssssh', 'hsEssEsh', 'hssssssh', 'hbbbbbbh', 'ssbbbbss'],
+  },
   miner: {
     palette: { h: '#e6a33c', s: '#c99066', c: '#c77b32', d: '#714e39', l: '#514958' },
     face: ['hhhhhhhh', 'hhhwwhhh', 'hhhhhhhh', 'ssssssss', 'sEssssEs', 'ssssssss', 'ssbbbbss', 'ssssssss'],
