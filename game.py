@@ -329,17 +329,8 @@ class Game:
             self.interact(p, now)
             return
         if kind == "drop_weapon":
-            weapon = p.weapon
-            if p.alive and p.weapons.get(weapon, 0) > 0:
-                uses = p.weapons.pop(weapon)
-                p.weapon = ""
-                p.draw_started = None
-                floor = max((b["h"] for b in self.blocks if b["h"] <= p.jump
-                             and abs(p.x - b["x"]) < .5 and abs(p.z - b["z"]) < .5), default=0)
-                self.objects.append({"id": "drop-weapon-" + uuid.uuid4().hex, "kind": "weapon_pickup",
-                                     "weapon": weapon, "text": RECIPES[weapon][0], "uses": uses,
-                                     "x": p.x, "y": floor, "z": p.z,
-                                     "hp": 1, "max_hp": 1, "ready": 0, "expires": now + 60})
+            if p.alive:
+                self.drop_weapon(p, now)
             return
         if kind == "craft_modes":
             if now < p.next_settings_attempt:
@@ -615,6 +606,19 @@ class Game:
         ore = next(obj for obj in self.objects if obj["id"] == source)
         ore["ready"] = now + 10
 
+    def drop_weapon(self, p, now):
+        weapon = p.weapon
+        if p.weapons.get(weapon, 0) > 0:
+            uses = p.weapons.pop(weapon)
+            p.weapon = ""
+            p.draw_started = None
+            floor = max((b["h"] for b in self.blocks if b["h"] <= p.jump
+                         and abs(p.x - b["x"]) < .5 and abs(p.z - b["z"]) < .5), default=0)
+            self.objects.append({"id": "drop-weapon-" + uuid.uuid4().hex, "kind": "weapon_pickup",
+                                 "weapon": weapon, "text": RECIPES[weapon][0], "uses": uses,
+                                 "x": p.x, "y": floor, "z": p.z,
+                                 "hp": 1, "max_hp": 1, "ready": 0, "expires": now + 60})
+
     def drop_crystal(self, player, now):
         source = player.crystal_source
         if not source:
@@ -810,6 +814,7 @@ class Game:
             self.kill(attacker, victim, now)
 
     def kill(self, killer, victim, now):
+        self.drop_weapon(victim, now)
         self.drop_crystal(victim, now)
         victim.hp = 0
         victim.alive = False
