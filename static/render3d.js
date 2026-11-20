@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=46';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=47';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
 
@@ -195,7 +195,7 @@ export class Renderer3D {
       const pull = draw ?? 0;
       right.rotation.set(-1.10 - pull * .34 + recoil * 2.6, 0, -.19 - pull * .20);
       left.rotation.set(-.65 - pull * .78, 0, draw === null ? 0 : -.48 - pull * .50);
-      rig.weapons.bow.rotation.set(-right.rotation.x, 0, .32);
+      rig.weapons.bow.rotation.set(-right.rotation.x, Math.PI, .32);
       poseBow(rig.weapons.bow, draw);
     } else {
       right.rotation.set(-.38 + walk * .7 - swing * 1.45, swing * .62, swing * .56);
