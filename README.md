@@ -38,3 +38,9 @@ python smoke_test.py
 `/hotpoor/mc-web/` 前缀，并在同前缀下转发 WebSocket `ws`。
 安装 `psycopg[binary]` 并在服务端设置 `MC_DATABASE_URL` 可使用 PostgreSQL。
 未设置时默认使用本机 SQLite。
+
+## 武器模型
+
+12 种武器使用 Tripo 生成的 GLB/PBR 模型，模型与任务编号见
+[模型清单](static/models/weapons/manifest.json)。游戏版贴图缩至 512 像素。
+第一人称、第三人称和拾取物共用模型，弓弦、攻击动作由游戏驱动。

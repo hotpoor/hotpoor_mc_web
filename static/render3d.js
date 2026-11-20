@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=41';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=44';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
 
@@ -132,7 +132,7 @@ export class Renderer3D {
     const right = createArm(-.43);
     const left = createArm(.43);
     const weapons = {};
-    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd']) {
+    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'beam']) {
       const weapon = makeWeapon(kind, overlay);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
@@ -719,7 +719,7 @@ export class Renderer3D {
       this.scene.remove(mesh);
       mesh.traverse(child => {
         child.geometry?.dispose();
-        child.material?.map?.dispose();
+        if (!child.material?.userData.sharedTextures) child.material?.map?.dispose();
         child.material?.dispose();
       });
       this.objectives.delete(id);
@@ -755,9 +755,7 @@ export class Renderer3D {
           mesh.userData.healthBar = { canvas, map };
 
         } else if (obj.kind === 'weapon_pickup') {
-          const model = obj.weapon === 'beam'
-            ? new THREE.Mesh(new THREE.OctahedronGeometry(.28), new THREE.MeshBasicMaterial({ color: 0x66ddff }))
-            : makeWeapon(obj.weapon);
+          const model = makeWeapon(obj.weapon);
           model.position.y = .9;
           model.scale.setScalar(1.45);
           if (obj.weapon !== 'beam') model.rotation.z = -.18;

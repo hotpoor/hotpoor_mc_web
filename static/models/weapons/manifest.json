@@ -1,0 +1,86 @@
+{
+  "sword": {
+    "task_id": "b8572823-018c-4fd3-906c-bafae9516634",
+    "model": "v3.1-20260211",
+    "triangles": 4608,
+    "bytes": 446556,
+    "texture_max_size": 512
+  },
+  "hammer": {
+    "task_id": "a4f8f4f2-f057-4c26-a551-7dbc78576d3b",
+    "model": "v3.1-20260211",
+    "triangles": 5195,
+    "bytes": 579360,
+    "texture_max_size": 512
+  },
+  "bow": {
+    "task_id": "7ce206be-0746-496a-a8c5-310b01a68c39",
+    "model": "v3.1-20260211",
+    "triangles": 4118,
+    "bytes": 538804,
+    "texture_max_size": 512
+  },
+  "mace": {
+    "task_id": "7fe68e9d-09fe-4447-80d0-e516dedbf491",
+    "model": "v3.1-20260211",
+    "triangles": 4679,
+    "bytes": 412592,
+    "texture_max_size": 512
+  },
+  "blade": {
+    "task_id": "7a5923d8-2f2d-4631-a1d2-a61cc82bf30a",
+    "model": "v3.1-20260211",
+    "triangles": 5175,
+    "bytes": 642452,
+    "texture_max_size": 512
+  },
+  "halberd": {
+    "task_id": "55e65683-f9e2-47d9-ab81-8590b3c2d8b8",
+    "model": "v3.1-20260211",
+    "triangles": 3786,
+    "bytes": 501144,
+    "texture_max_size": 512
+  },
+  "gun": {
+    "task_id": "7b5da070-c25c-456c-80bb-fe3069e918a7",
+    "model": "v3.1-20260211",
+    "triangles": 4958,
+    "bytes": 586424,
+    "texture_max_size": 512
+  },
+  "dual": {
+    "task_id": "42accd3a-9b13-4a5d-b41a-99ac874cff25",
+    "model": "v3.1-20260211",
+    "triangles": 4194,
+    "bytes": 445924,
+    "texture_max_size": 512
+  },
+  "spear": {
+    "task_id": "27109615-3558-468d-ab90-9d844fe48206",
+    "model": "v3.1-20260211",
+    "triangles": 4991,
+    "bytes": 664836,
+    "texture_max_size": 512
+  },
+  "beam": {
+    "task_id": "02cb4390-dcf7-45ef-a7b3-1667e83d2594",
+    "model": "v3.1-20260211",
+    "triangles": 4854,
+    "bytes": 519348,
+    "texture_max_size": 512
+  },
+  "rocket": {
+    "task_id": "fa73cb0d-3bc5-4710-94ed-3bc066f18d24",
+    "model": "v3.1-20260211",
+    "triangles": 4743,
+    "bytes": 456144,
+    "texture_max_size": 512
+  },
+  "axe": {
+    "task_id": "3223850a-0362-4704-af0b-ba2673a3fc8e",
+    "model": "v3.1-20260211",
+    "triangles": 4215,
+    "bytes": 493436,
+    "texture_max_size": 512
+  }
+}
