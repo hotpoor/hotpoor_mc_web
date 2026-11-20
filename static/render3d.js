@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=45';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=46';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
 
@@ -91,6 +91,7 @@ export class Renderer3D {
     );
     this.skins = Object.fromEntries(Object.keys(SKIN_NAMES).map(name => [name, makeSkin(name)]));
     this.buildViewModel();
+    for (const light of this.scene.children.filter(object => object.isLight)) light.layers.enable(1);
     this.buildGround();
     this.buildWalls();
     for (const key of Object.keys(world.teams)) this.buildBase(world.teams[key]);
@@ -923,7 +924,32 @@ export class Renderer3D {
     if (id === this.myId) this.swingSelf = 0.24;
   }
 
-  draw() { this.renderer.render(this.scene, this.camera); }
+  draw() {
+    const overlay = this.viewModel.visible;
+    if (overlay) {
+      this.viewModel.traverse(object => {
+        object.layers.set(1);
+        if (!object.isMesh) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          material.depthTest = true;
+          material.depthWrite = true;
+        }
+      });
+    }
+    this.renderer.render(this.scene, this.camera);
+    if (overlay) {
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      this.camera.layers.set(1);
+      const background = this.scene.background;
+      this.scene.background = null;
+      this.renderer.render(this.scene, this.camera);
+      this.scene.background = background;
+      this.camera.layers.set(0);
+      this.renderer.autoClear = true;
+    }
+  }
 
   resize() {
     const w = this.canvas.clientWidth || window.innerWidth;

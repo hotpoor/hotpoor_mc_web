@@ -80,10 +80,25 @@ export function attachWeaponModel(group, kind, overlay = false) {
     normalized.scale.setScalar(scale);
     if (kind === 'bow') {
       const bowBounds = new THREE.Box3().setFromObject(normalized);
-      normalized.position.x = -bowBounds.min.x;
-      group.userData.tipX = bowBounds.max.x - bowBounds.min.x;
-      for (const string of group.userData.string) string.position.x = group.userData.tipX;
-      group.userData.arrow.position.x = group.userData.tipX;
+      // Put the grip at the hand and the opening toward the archer.
+      normalized.position.z = bowBounds.min.x;
+      normalized.rotation.y = Math.PI / 2;
+      normalized.updateMatrixWorld(true);
+      const points = [];
+      normalized.traverse(mesh => {
+        if (!mesh.isMesh) return;
+        const positions = mesh.geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+          points.push(new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld));
+        }
+      });
+      const height = new THREE.Box3().setFromPoints(points);
+      const band = (height.max.y - height.min.y) * .018;
+      group.userData.stringAnchors = [height.min.y, height.max.y].map(end => {
+        const tip = points.filter(point => Math.abs(point.y - end) <= band);
+        return tip.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(tip.length);
+      });
+      group.userData.poseBow?.(group.userData.draw ?? null);
     }
     for (const child of fallback) {
       // Keep the animated string and arrow attached to the generated bow.

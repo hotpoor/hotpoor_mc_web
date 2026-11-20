@@ -1,4 +1,4 @@
-import { attachWeaponModel } from './weapon-models.js?v=45';
+import { attachWeaponModel } from './weapon-models.js?v=46';
 import * as THREE from './vendor/three.module.js';
 
 export function voxelMaterial(kind) {
@@ -108,6 +108,7 @@ export function makeWeapon(kind, overlay = false) {
     arrow.rotation.x = Math.PI / 2;
     group.add(arrow);
     group.userData.arrow = arrow;
+    group.userData.poseBow = draw => poseBow(group, draw);
     poseBow(group, null);
   } else if (kind === 'gun') {
     part(.18, .17, .42, 0x46515c, 0, 0, .13);
@@ -132,10 +133,12 @@ export function makeWeapon(kind, overlay = false) {
 
 export function poseBow(bow, draw) {
   const { string, arrow } = bow.userData;
-  const tipX = bow.userData.tipX ?? .24;
-  const nock = new THREE.Vector3(tipX, 0, -(draw ?? 0) * .49);
+  bow.userData.draw = draw;
+  const anchors = bow.userData.stringAnchors || [new THREE.Vector3(.24, -.52, 0), new THREE.Vector3(.24, .52, 0)];
+  const nock = anchors[0].clone().lerp(anchors[1], .5);
+  nock.z -= (draw ?? 0) * .49;
   for (let i = 0; i < string.length; i++) {
-    const tip = new THREE.Vector3(tipX, i === 0 ? -.52 : .52, 0);
+    const tip = anchors[i];
     const delta = tip.clone().sub(nock);
     string[i].position.copy(nock).lerp(tip, .5);
     string[i].scale.y = delta.length();
