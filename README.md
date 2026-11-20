@@ -41,6 +41,6 @@ python smoke_test.py
 
 ## 武器模型
 
-12 种武器使用 Tripo 生成的 GLB/PBR 模型，模型与任务编号见
-[模型清单](static/models/weapons/manifest.json)。游戏版贴图缩至 512 像素。
+12 种武器先按统一造型生成独立参考图，再使用 Tripo 图片建模生成 GLB/PBR 模型，模型与任务编号见
+[模型清单](static/models/weapons/manifest.json)。游戏版贴图缩至 1024 像素。
 第一人称、第三人称和拾取物共用模型，弓弦、攻击动作由游戏驱动。

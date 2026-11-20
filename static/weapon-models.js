@@ -43,6 +43,7 @@ export function attachWeaponModel(group, kind, overlay = false) {
         copy.depthWrite = !overlay;
         copy.fog = !overlay;
         copy.roughness = Math.max(.45, copy.roughness ?? .7);
+        copy.metalness = Math.min(.5, copy.metalness ?? 0);
         return copy;
       };
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(prepare) : prepare(mesh.material);

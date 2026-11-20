@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=44';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=45';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
 
@@ -187,6 +187,9 @@ export class Renderer3D {
       right.rotation.set(-1.24, 0, -.57);
       left.rotation.set(-1.24, 0, .57);
       rig.charge.scale.setScalar(.3 + pull);
+      if (weapon === 'rocket' || weapon === 'gun') {
+        rig.weapons[weapon].quaternion.copy(right.quaternion).invert();
+      }
     } else if (bow) {
       const pull = draw ?? 0;
       right.rotation.set(-1.10 - pull * .34 + recoil * 2.6, 0, -.19 - pull * .20);
