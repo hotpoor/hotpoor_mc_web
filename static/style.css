@@ -308,3 +308,9 @@ body.first-person #view { cursor: crosshair; }
 .armor-bar { height: 12px; padding: 1px; }
 .np-armor-bar { height: 4px; margin-top: 3px; border: 1px solid #555; background: #292c32; }
 .np-armor-fill { height: 100%; background: #ffffff; transition: width .1s; }
+
+#monocular-view { position: fixed; inset: 0; z-index: 7; pointer-events: none; background: radial-gradient(circle 32vmin at 50% 50%, transparent 97%, #d2d0bc 98%, #080a0c 100%); }
+#monocular-view::before, #monocular-view::after { content: ''; position: absolute; background: #fff8; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+#monocular-view::before { width: 10vmin; height: 1px; }
+#monocular-view::after { width: 1px; height: 10vmin; }
+#monocular-view span { position: absolute; top: calc(50% + 33vmin); left: 50%; transform: translateX(-50%); color: #eee; white-space: nowrap; font-size: 12px; }

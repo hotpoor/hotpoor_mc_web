@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=49';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=50';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -745,7 +745,7 @@ export class Renderer3D {
       }
     }
 
-    this.viewModel.visible = first && !!me?.alive;
+    this.viewModel.visible = first && !!me?.alive && !this.monocular;
     for (const [id, arrow] of this.arrows) {
       arrow.age += dt;
       if (arrow.stopped && arrow.age > .25) {
@@ -812,7 +812,7 @@ export class Renderer3D {
     }
   }
 
-  syncObjectives(objects) {
+  syncObjectives(objects, viewerName = '') {
     const active = new Set(objects.map(obj => obj.id));
     for (const [id, mesh] of this.objectives) {
       if (active.has(id)) continue;
@@ -918,7 +918,29 @@ export class Renderer3D {
             const stripe = box(.035, .44, .11, 0x3a2d25, .7); stripe.position.set(side * .285, .7, z); body.add(stripe);
           }
           body.scale.setScalar(tiger ? 1.25 : dog ? .75 : .95);
-          mesh.add(body); mesh.userData.animal = { body, legs };
+          const collar = box(.6, .12, .18, 0xcf4545, .94); collar.position.z = .44; collar.visible = false; body.add(collar);
+          mesh.add(body); mesh.userData.animal = { body, legs, collar };
+          const cv = document.createElement('canvas'); cv.width = 640; cv.height = 120;
+          const map = new THREE.CanvasTexture(cv); map.colorSpace = THREE.SRGBColorSpace;
+          const status = new THREE.Sprite(new THREE.SpriteMaterial({ map, depthTest: true, depthWrite: false }));
+          status.position.y = tiger ? 2.15 : 1.65; status.scale.set(3.6, .68, 1); mesh.add(status);
+          mesh.userData.animalStatus = { cv, map, key: '' };
+        } else if (obj.kind === 'food_pickup' || obj.kind === 'poop_pickup') {
+          const poop = obj.kind === 'poop_pickup';
+          if (poop) {
+            for (let i = 0; i < 3; i++) {
+              const pile = new THREE.Mesh(new THREE.SphereGeometry(.24 - i * .065, 6, 4), new THREE.MeshLambertMaterial({ color: 0x65422b }));
+              pile.position.y = .12 + i * .14; mesh.add(pile);
+            }
+          } else {
+            const bowl = new THREE.Mesh(new THREE.CylinderGeometry(.3, .24, .15, 10), new THREE.MeshLambertMaterial({ color: 0xc0a96d }));
+            bowl.position.y = .1; mesh.add(bowl);
+            for (const x of [-.12, 0, .12]) {
+              const kibble = box(.13, .12, .14, 0x86582e, .21); kibble.position.x = x; mesh.add(kibble);
+            }
+          }
+          const label = labelSprite((poop ? '狗屎' : '狗粮 / 兽肉') + ' · E', poop ? '#c3a47b' : '#e7dca3', 448, 100, 38);
+          label.position.y = .9; label.scale.set(2.2, .5, 1); label.material.depthTest = true; mesh.add(label);
         } else if (obj.kind === 'armor_pickup') {
           const color = obj.armor_kind === 'elite' ? 0xe2c87b : 0xd9e0e7;
           const model = new THREE.Group();
@@ -999,9 +1021,26 @@ export class Renderer3D {
         mesh.userData.gateStatus.visible = obj.locked;
       }
       if (mesh.userData.animal) {
-        const { body, legs } = mesh.userData.animal;
+        const { body, legs, collar } = mesh.userData.animal;
         body.rotation.y = obj.yaw || 0;
-        legs.forEach((leg, i) => leg.rotation.x = Math.sin(this.time * 5 + (i % 2) * Math.PI) * .3);
+        body.rotation.x = obj.attacking ? -.12 : 0;
+        body.position.y = obj.hurt ? .08 : 0;
+        collar.visible = !!obj.owner;
+        legs.forEach((leg, i) => leg.rotation.x = obj.moving ? Math.sin(this.time * 8 + (i % 2) * Math.PI) * .45 : 0);
+        const status = mesh.userData.animalStatus;
+        const title = obj.owner ? obj.owner + '的伙伴犬' : obj.name;
+        const info = obj.animal === 'dog' ? '好感 ' + Math.round(obj.favor?.[viewerName] || 0) + ' · 饱食 ' + Math.round(obj.hunger) : '危险 · 主动攻击';
+        const key = title + info + obj.hp;
+        if (status.key !== key) {
+          const ctx = status.cv.getContext('2d'); ctx.clearRect(0, 0, 640, 120);
+          ctx.fillStyle = '#161d20dd'; ctx.fillRect(0, 0, 640, 120);
+          ctx.fillStyle = obj.owner ? '#8fffdc' : obj.animal === 'dog' ? '#ffe3a2' : '#ffaaa0';
+          ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(title + ' · ' + info, 320, 38, 620);
+          ctx.fillStyle = '#3a3133'; ctx.fillRect(10, 60, 620, 48);
+          ctx.fillStyle = '#a4cc75'; ctx.fillRect(10, 60, 620 * obj.hp / obj.max_hp, 48);
+          ctx.fillStyle = '#ffffff'; ctx.fillText(obj.hp + ' / ' + obj.max_hp, 320, 95);
+          status.map.needsUpdate = true; status.key = key;
+        }
       }
       if (mesh.userData.enemy) {
         const { body, legs, arms } = mesh.userData.enemy;
@@ -1185,11 +1224,17 @@ export class Renderer3D {
   getPitch() { return this.pitch; }
   setYaw(yaw) { this.yaw = yaw; }
 
+  setMonocular(enabled) {
+    this.monocular = enabled;
+    this.camera.fov = enabled ? 18 : this.viewMode === 'first' ? 76 : 54;
+    this.camera.updateProjectionMatrix();
+  }
+
   setViewMode(mode, team) {
     this.viewMode = mode === 'first' ? 'first' : 'third';
     const first = this.viewMode === 'first';
     this.viewModel.visible = first;
-    this.camera.fov = first ? 76 : 54;
+    this.camera.fov = this.monocular ? 18 : first ? 76 : 54;
     this.camera.updateProjectionMatrix();
 
   }
@@ -1198,8 +1243,8 @@ export class Renderer3D {
     if (this.viewMode !== 'first') return;
     // The camera looks along (sin(yaw), cos(yaw)), so its screen-right vector
     // is (-cos(yaw), sin(yaw)). Turning right therefore DECREASES yaw.
-    this.yaw -= dx * 0.0026;
-    this.pitch = Math.max(-1.15, Math.min(1.15, this.pitch - dy * 0.0022));
+    this.yaw -= dx * (this.monocular ? .0008 : .0026);
+    this.pitch = Math.max(-1.15, Math.min(1.15, this.pitch - dy * (this.monocular ? .0007 : .0022)));
   }
 
   screenToGround(clientX, clientY) {

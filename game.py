@@ -20,6 +20,7 @@ from itertools import combinations
 
 from tornado.ioloop import PeriodicCallback
 from campaign import CHARACTERS, NAME_SKINS
+import animal_system
 
 from world import (RULES, TEAMS, build_world, collides, in_own_base,
                    pool_at)
@@ -54,6 +55,9 @@ class Player:
     hp: float = MAX_HP
     alive: bool = True
     armor: dict = field(default_factory=dict)
+    food: int = 3
+    poop: int = 0
+    last_feed: float = 0.0
     score: int = 0                 # cumulative, persisted in SQLite
     kills: int = 0                 # cumulative
     deaths: int = 0                # cumulative
@@ -274,6 +278,7 @@ class Game:
                                      "name": {"dog": "村犬", "tiger": "山虎", "wolf": "灰狼"}[animal],
                                      "x": x, "z": z, "home_x": x, "home_z": z, "yaw": 0,
                                      "hp": 1, "max_hp": 1, "ready": 0})
+        animal_system.initialize(self)
         self.world["armor_types"] = ARMOR_TYPES
         self.world["materials"] = MATERIALS
         self.world["weapon_uses"] = WEAPON_USES
@@ -389,6 +394,9 @@ class Game:
         if not p:
             return
         now = time.monotonic()
+        if kind in ("feed", "feed_poop"):
+            animal_system.feed(self, p, now, poop=kind == "feed_poop")
+            return
         if kind == "interact":
             self.interact(p, now)
             return
@@ -558,7 +566,7 @@ class Game:
     def hammer_slam(self, p, now):
         self.emit({"k": "slam", "x": p.x, "y": p.jump, "z": p.z})
         for obj in self.targets(p):
-            if (obj["kind"] in ("dummy", "enemy", "time_stone") and p.jump <= 1.2
+            if (obj["kind"] in ("dummy", "enemy", "time_stone", "animal") and p.jump <= 1.2
                     and math.hypot(obj["x"] - p.x, obj["z"] - p.z) <= 3.6
                     and not self.blocked(p.x, p.z, obj["x"], obj["z"])):
                 self.damage_object(p, obj, 55, now)
@@ -647,11 +655,30 @@ class Game:
             return
         available = [obj for obj in self.objects
                      if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
+                         or (obj["kind"] == "food_pickup" and player.food < 20)
+                         or (obj["kind"] == "poop_pickup" and player.poop < 10)
                          or (obj["kind"] == "armor_pickup" and (not player.armor or obj["durability"] > player.armor["durability"] or ARMOR_TYPES[obj["armor_kind"]]["reduction"] > player.armor["reduction"]))
                          or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in self.craft_modes)
                          or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < obj.get("uses", WEAPON_USES["pickup"])))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
+            if ore["kind"] == "poop_pickup":
+                player.poop += 1
+                self.objects.remove(ore)
+                self.emit({"k": "story", "id": player.id, "text": "捡到狗屎 · %d/10 · R 单独喂给狗，可能降低好感并被咬" % player.poop})
+                return
+            if ore["kind"] == "food_pickup":
+                amount = min(20 - player.food, ore["amount"])
+                player.food += amount
+                if "expires" in ore:
+                    ore["amount"] -= amount
+                    if ore["amount"] <= 0:
+                        self.objects.remove(ore)
+                else:
+                    ore["hp"] = 0
+                    ore["ready"] = now + 20
+                self.emit({"k": "story", "id": player.id, "text": "食物 +%d · %d/20 · 靠近狗按 F 喂食" % (amount, player.food)})
+                return
             if ore["kind"] == "armor_pickup":
                 self.drop_armor(player, now)
                 cfg = ARMOR_TYPES[ore["armor_kind"]]
@@ -744,7 +771,7 @@ class Game:
                              "hp": 1, "max_hp": 1, "ready": 0, "source": source, "expires": now + 60})
 
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone") and obj.get("team") != player.team
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone", "animal") and obj.get("team") != player.team
                 and (not obj.get("city") or self.city_unlocked(obj["city"]))]
 
     @staticmethod
@@ -754,6 +781,9 @@ class Game:
 
     def damage_object(self, player, obj, amount, now):
         if obj["hp"] <= 0 or (obj.get("city") and not self.city_unlocked(obj["city"])):
+            return
+        if obj["kind"] == "animal":
+            animal_system.hurt(self, obj, amount, now, player)
             return
         obj["hp"] = max(0, obj["hp"] - amount)
         obj["hurt_until"] = now + .18
@@ -1066,6 +1096,13 @@ class Game:
             if enemy["kind"] != "enemy" or enemy["hp"] <= 0 or not self.city_unlocked(enemy["city"]):
                 continue
             city = cities[enemy["city"]]
+            pet = next((o for o in self.objects if o["kind"] == "animal" and o["animal"] == "dog"
+                        and o["owner"] and o["hp"] > 0 and math.hypot(o["x"] - enemy["x"], o["z"] - enemy["z"]) <= 1.9
+                        and not self.blocked(enemy["x"], enemy["z"], o["x"], o["z"])), None)
+            if pet and now - enemy["last_attack"] >= 1.1:
+                enemy["last_attack"] = now
+                animal_system.hurt(self, pet, 20 if enemy.get("boss") else 8, now)
+                continue
             candidates = [p for p in self.players.values() if p.alive
                           and abs(p.x - city["x"]) < 17 and abs(p.z - city["z"]) < 17
                           and (not enemy.get("boss") or
@@ -1099,23 +1136,7 @@ class Game:
                 self.damage(attacker, target, 20 if enemy.get("boss") else 8, now)
 
     def advance_animals(self, dt, now):
-        for animal in self.objects:
-            if animal["kind"] != "animal":
-                continue
-            phase = now * .3 + animal["home_x"]
-            tx = animal["home_x"] + math.sin(phase) * 1.5
-            tz = animal["home_z"] + math.cos(phase) * 1.5
-            dx, dz = tx - animal["x"], tz - animal["z"]
-            distance = math.hypot(dx, dz)
-            if distance < .1:
-                continue
-            animal["yaw"] = math.atan2(dx, dz)
-            step = min(distance, .75 * dt)
-            nx, nz = animal["x"] + dx / distance * step, animal["z"] + dz / distance * step
-            if not collides(nx, animal["z"], self.blocks, radius=.3):
-                animal["x"] = nx
-            if not collides(animal["x"], nz, self.blocks, radius=.3):
-                animal["z"] = nz
+        animal_system.advance(self, dt, now)
 
     def tick(self):
         now = time.monotonic()
@@ -1131,6 +1152,9 @@ class Game:
         for obj in self.objects:
             if not obj["hp"] and obj["ready"] is not None and now >= obj["ready"]:
                 obj["hp"] = obj["max_hp"]
+                if obj["kind"] == "animal":
+                    obj.update(x=obj["home_x"], z=obj["home_z"], last_attack=now,
+                               angry_at="", angry_until=0)
         active_crystals = {obj["team"] for obj in self.objects if obj["kind"] == "crystal" and obj["hp"] > 0}
         previous = {p.id: (p.x, p.z) for p in self.players.values() if p.alive}
         for p in list(self.players.values()):
@@ -1206,7 +1230,7 @@ class Game:
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
                 "alive": p.alive, "armor": dict(p.armor), "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
-                "weapons": p.weapons, "syllable": p.syllable, "syllables": p.syllables,
+                "food": p.food, "poop": p.poop, "weapons": p.weapons, "syllable": p.syllable, "syllables": p.syllables,
                 "forge_near": self.forge_near(p),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
                 "beam_cd": round(max(0, p.beam_ready - now), 1),

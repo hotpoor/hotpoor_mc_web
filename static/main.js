@@ -15,7 +15,7 @@ const G = {
   players: new Map(), me: null, renderer: null, connected: false, joined: false,
   keys: new Set(), mouse: { cx: innerWidth / 2, cy: innerHeight / 2, wx: 0, wz: 0 },
   attacking: false, lastAttack: -Infinity, weapon: '', drawStart: null, chatOpen: false, yaw: 0,
-  viewMode: 'third', dragging: false,
+  viewMode: 'third', dragging: false, monocular: false, scopeReturn: 'third',
   invertLook: localStorage.getItem('mc.invertLook') === '1',
   teamScore: { red: 0, blue: 0 }, online: 0,
   inputAcc: 0, hudAcc: 0, loopStarted: false,
@@ -138,7 +138,7 @@ async function initRenderer() {
         if (req && req.catch) req.catch(() => {});
       } catch (_) { /* right-drag still works */ }
     }
-    if (!G.me?.weapons?.[G.weapon]) return;
+    if (G.monocular || !G.me?.weapons?.[G.weapon]) return;
     G.attacking = true;
     aimYaw();
     if (G.weapon === 'rocket') {
@@ -203,7 +203,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, armor: p.armor || {},
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -267,7 +267,7 @@ function applyState(s) {
       + ' · 首领 ' + alive.filter(obj => obj.boss).length + '/3'
       + (alive.length ? '' : ' · 已肃清') + (G.campaignCleared.includes(city.id) ? ' · 沿大道前往下一城，出口驿站可按 E' : ' · 清城开启下一章');
   } else $('campaign-status').textContent = '第一城：往北前往黄巾起义城';
-  G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))));
+  G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))), G.name);
   for (const team of ['red', 'blue']) {
     const crystal = objects.find(obj => obj.id === team);
     if (crystal) $('crystal-' + team).textContent = crystal.hp
@@ -317,6 +317,13 @@ function handleEvent(ev) {
       break;
     case 'chapter_clear':
       banner(ev.text); log(ev.text, 'kill');
+      break;
+    case 'animal_feed':
+      if (ev.id === G.id) { banner(ev.text); log(ev.text, 'join'); }
+      break;
+    case 'animal_down':
+      log(ev.name + '被击败' + (ev.name === '村犬' ? '，60 秒后在村镇恢复' : '，兽肉与兽皮可按 E 拾取'), 'kill');
+      G.renderer?.spawnSlam?.({ x: ev.x, y: 0, z: ev.z });
       break;
     case 'enemy_down':
       log('击败 ' + ev.name, 'kill');
@@ -382,6 +389,9 @@ window.addEventListener('keydown', e => {
     equip({ 1: 'sword', 2: 'bow', 3: 'beam', 4: 'rocket', 5: 'gun', 6: 'axe', 7: 'mace', 8: 'hammer', 9: 'dual', 0: 'spear', '[': 'blade', ']': 'halberd' }[k]);
     return;
   }
+  if (k === 'b' && !e.repeat) { e.preventDefault(); toggleMonocular(); return; }
+  if (k === 'f' && !e.repeat) { e.preventDefault(); feedDog(false); return; }
+  if (k === 'r' && !e.repeat) { e.preventDefault(); feedDog(true); return; }
   if (k === 'g' && !e.repeat) {
     e.preventDefault();
     dropWeapon();
@@ -527,6 +537,13 @@ $('hammer-btn').addEventListener('click', () => { if (G.joined) equip('hammer');
 $('mace-btn').addEventListener('click', () => { if (G.joined) equip('mace'); });
 $('axe-btn').addEventListener('click', () => { if (G.joined) equip('axe'); });
 $('gun-btn').addEventListener('click', () => { if (G.joined) equip('gun'); });
+
+function feedDog(poop) {
+  if (G.me?.alive && !G.chatOpen) send({ t: poop ? 'feed_poop' : 'feed' });
+}
+$('feed-dog').addEventListener('click', () => feedDog(false));
+$('feed-poop').addEventListener('click', () => feedDog(true));
+$('monocular-btn').addEventListener('click', () => toggleMonocular());
 
 function interactCrystal() {
   if (G.me?.alive && !G.chatOpen) send({ t: 'interact' });
@@ -681,6 +698,7 @@ $('weapon-toggle').addEventListener('click', () => {
 });
 
 function tryAttack() {
+  if (G.monocular) return;
   const now = performance.now();
   if (!G.me || !G.me.alive || !G.me.weapons?.[G.weapon] || now - G.lastAttack < ({ axe: 850, mace: 1100, hammer: 1500, dual: 700, spear: 1000, blade: 1200, halberd: 1350 }[G.weapon] || 500)) return;
   G.lastAttack = now;
@@ -713,7 +731,24 @@ function setViewMode(mode) {
   log(next === 'first' ? '已切换到第一人称视角' : '已切换到第三人称视角', 'join');
 }
 
+function toggleMonocular(force) {
+  if (!G.renderer || G.renderer.is2D || !G.me?.alive) return;
+  const enabled = force ?? !G.monocular;
+  if (enabled === G.monocular) return;
+  if (enabled) {
+    G.scopeReturn = G.viewMode;
+    cancelDraw(); G.attacking = false;
+    setViewMode('first');
+  }
+  G.monocular = enabled;
+  G.renderer.setMonocular(enabled);
+  $('monocular-view').classList.toggle('hidden', !enabled);
+  $('monocular-btn').textContent = enabled ? '收起单筒望远镜 · B' : '单筒望远镜 · B';
+  if (!enabled) setViewMode(G.scopeReturn);
+}
+
 function toggleView() {
+  if (G.monocular) { toggleMonocular(false); return; }
   setViewMode(G.viewMode === 'first' ? 'third' : 'first');
 }
 
@@ -859,6 +894,14 @@ function updateHud() {
   const uses = me.weapons?.[G.weapon];
   $('drop-weapon').disabled = !me.alive || !uses;
   $('weapon-life').textContent = uses === -1 ? '剩余次数 · 无限' : uses != null ? '剩余次数 · ' + uses : '';
+  $('pet-inventory').textContent = '狗粮 / 兽肉 ' + (me.food || 0) + '/20 · 狗屎 ' + (me.poop || 0) + '/10';
+  const dogs = (G.objects || []).filter(obj => obj.kind === 'animal' && obj.animal === 'dog');
+  const near = dogs.filter(obj => obj.hp > 0 && Math.hypot(obj.x - me.rx, obj.z - me.rz) < 4).sort((a, b) => Math.hypot(a.x - me.rx, a.z - me.rz) - Math.hypot(b.x - me.rx, b.z - me.rz))[0];
+  const mine = dogs.filter(obj => obj.owner === G.name);
+  $('pet-status').textContent = near ? '村犬 · 好感 ' + Math.round(near.favor?.[G.name] || 0) + '/100 · 饱食 ' + Math.round(near.hunger) + '/100' + (near.owner ? ' · 主人 ' + near.owner : ' · 未驯服')
+    : mine.length ? '伙伴犬 ' + mine.length + '只 · ' + mine.map(dog => dog.hp > 0 ? dog.hp + '/' + dog.max_hp : '恢复中 ' + dog.cooldown + '秒').join('，') : '靠近村犬 · F 喂粮 / R 喂狗屎';
+  $('feed-dog').disabled = !me.alive || !me.food || !near;
+  $('feed-poop').disabled = !me.alive || !me.poop || !near;
   $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
   $('recall-btn').textContent = me.recall ? '回城中 · ' + me.recall.toFixed(1) + ' 秒'
@@ -880,6 +923,7 @@ function updateHud() {
 function updateDeath() {
   const me = G.me;
   const dying = !!(me && !me.alive);
+  if (dying && G.monocular) { G.monocular = false; G.renderer?.setMonocular(false); $('monocular-view').classList.add('hidden'); $('monocular-btn').textContent = '单筒望远镜 · B'; setViewMode(G.scopeReturn); }
   $('death-overlay').classList.toggle('hidden', !dying);
   if (!dying) return;
   $('death-seconds').textContent = Math.max(0, me.respawn).toFixed(1);
