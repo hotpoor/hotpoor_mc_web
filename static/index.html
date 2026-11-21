@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=40">
+<link rel="stylesheet" href="./style.css?v=49">
 </head>
 <body>
 
@@ -49,6 +49,8 @@
   </div>
   <div class="hp-row"><span>生命</span><b id="hp-text">100 / 100</b></div>
   <div class="bar"><div id="hp-bar" class="bar-fill hp"></div></div>
+  <div class="hp-row armor-row"><span>盔甲</span><b id="armor-text">未穿戴 · 0 / 0</b></div>
+  <div class="bar armor-bar"><div id="armor-bar" class="bar-fill armor"></div></div>
   <div class="hud-stats">
     <div><span>总积分</span><b id="stat-score">0</b></div>
     <div><span>本局击杀</span><b id="stat-kills">0</b></div>
@@ -56,6 +58,7 @@
   </div>
   <div id="crystal-red" class="hud-status"></div>
   <div id="crystal-blue" class="hud-status"></div>
+  <details id="campaign-journal"><summary>三国征程 · 十章</summary><div id="campaign-chapters"></div></details>
   <div id="campaign-status" class="hud-status">第一城：往北前往黄巾起义城</div>
   <div id="hud-status" class="hud-status"></div>
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
@@ -102,7 +105,10 @@
   <div id="tab-help" class="tab-body">
     <div class="help-title">怎么玩</div>
     <ul class="help-list">
-      <li>三国征战：往北沿道路前往第一城「黄巾起义城」，击败黄巾贼和内城张角、张宝、张梁。各城东南角的时光机石头被击碎后，本城敌人全体复活；石头 10 秒后恢复。东有虎牢关城、南有官渡城、西有赤壁城。</li>
+      <li>三国十章：从黄巾起义到三分天下，按章节清城。击败本城全部守军和三名首领后，出口「下一城」驿站开启，靠近按 E；可沿大道步行或经「上一城」返回。城中名将可按 E 对话。时光机石头仍可复活本城敌人，已解锁的章节保持开放。</li>
+      <li>关间大道两侧有护城河与围挡，村镇设回血泉、宝剑与弓箭补给；村镇和林道有狗、狼、老虎活动。</li>
+      <li>盔甲：同时只能穿一件。铁甲减伤约 40%、80 耐久，精甲减伤约 60%、160 耐久。抵挡的伤害消耗耐久，白条归零即破损；击败普通兵有概率掉铁甲，首领必掉精甲，按 E 装备。</li>
+      <li>所有敌人必掉武器：普通兵 10 次，首领珍品 40 次。战利品保留 3 分钟，任何玩家可按 E 拾取并数字键切换使用。皮肤列表新增三国人物。</li>
       <li><b>H</b> 原地回城，需 3 秒，成功后冷却 30 秒。移动、攻击或受伤会打断。</li>
       <li>靠近青色小水晶按 <b>E</b> 采集，带回己方水晶 5 格内再按 <b>E</b> 修复 100 点。场地内再次按 E 可放下，阵亡时会掉落。水晶用掉后，原采集点 10 秒后刷新。</li>
       <li>靠近拼音按 E 拾取，每次携带一枚。到地图四角的法阵按 E 存入，凑齐后点击配方组合武器。可直接拾取旋转武器（10 次），或用整词汉字（15 次）、单字拼音（20 次）、声母＋韵母（30 次）合成。重锤在空中左键可砸地。</li>
@@ -180,6 +186,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=48"></script>
+<script type="module" src="./main.js?v=49"></script>
 </body>
 </html>

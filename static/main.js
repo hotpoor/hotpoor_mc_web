@@ -1,4 +1,4 @@
-import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=41';
+import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=49';
 
 // mc-web client: networking, input, prediction, HUD and panels.
 const BUILD = new URL(import.meta.url).searchParams.get('v');
@@ -182,7 +182,7 @@ async function initRenderer() {
 // ---------------------------------------------------------------- state
 function applyState(s) {
   const seen = new Set();
-  const recalled = new Set((s.events || []).filter(ev => ev.k === 'recall').map(ev => ev.id));
+  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel'].includes(ev.k)).map(ev => ev.id));
   for (const p of s.players) {
     seen.add(p.id);
     let o = G.players.get(p.id);
@@ -203,7 +203,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive,
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, armor: p.armor || {},
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -247,13 +247,25 @@ function applyState(s) {
   }
   const objects = s.objects || [];
   G.objects = objects;
-  const city = G.world.cities?.find(city => G.me && Math.abs(G.me.x - city.x) < 20 && Math.abs(G.me.z - city.z) < 20);
+  G.campaignCleared = s.campaign_cleared || [];
+  const journalKey = G.campaignCleared.join(',');
+  if (G.journalKey !== journalKey) {
+    G.journalKey = journalKey;
+    $('campaign-chapters').innerHTML = (G.world.cities || []).map((city, index, cities) => {
+      const complete = G.campaignCleared.includes(city.id);
+      const unlocked = cities.slice(0, index).every(prev => G.campaignCleared.includes(prev.id));
+      return '<div class="chapter-entry">' + (complete ? '✓' : unlocked ? '▶' : '🔒') + ' 第' + city.chapter + '章 · ' + esc(city.name)
+        + '<small>' + esc(city.year) + ' · ' + esc(city.story) + '<br>名将：' + esc(city.allies.join('、'))
+        + '<br>首领：' + esc(city.bosses.join('、')) + '</small></div>';
+    }).join('');
+  }
+  const city = G.world.cities?.find(city => G.me && Math.abs(G.me.rx - city.x) < 20 && Math.abs(G.me.rz - city.z) < 20);
   if (city) {
     const enemies = objects.filter(obj => obj.kind === 'enemy' && obj.city === city.id);
     const alive = enemies.filter(obj => obj.hp > 0);
     $('campaign-status').textContent = city.name + ' · 敌人 ' + alive.length + '/' + enemies.length
-      + (city.id === 'yellow' ? ' · 首领 ' + alive.filter(obj => obj.boss).length + '/3' : '')
-      + (alive.length ? '' : ' · 已肃清') + ' · 东南角石头可复活全城';
+      + ' · 首领 ' + alive.filter(obj => obj.boss).length + '/3'
+      + (alive.length ? '' : ' · 已肃清') + (G.campaignCleared.includes(city.id) ? ' · 沿大道前往下一城，出口驿站可按 E' : ' · 清城开启下一章');
   } else $('campaign-status').textContent = '第一城：往北前往黄巾起义城';
   G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))));
   for (const team of ['red', 'blue']) {
@@ -286,6 +298,25 @@ function handleEvent(ev) {
       break;
     case 'crystal':
       log(G.world.teams[ev.team].name + '水晶被打碎，基地与泉水回血暂停 30 秒', 'join');
+      break;
+    case 'armor_equip':
+      if (ev.id === G.id) log('已装备' + ev.name + ' · 同时只能穿一件', 'join');
+      break;
+    case 'armor_break':
+      if (ev.id === G.id) { banner('盔甲已破损'); log('盔甲耐久耗尽，防御失效', 'join'); }
+      break;
+    case 'story':
+      if (ev.id === G.id) { banner(ev.text); log(ev.text, 'join'); }
+      break;
+    case 'chapter_travel':
+      if (ev.id === G.id) {
+        G.yaw = Math.PI; G.renderer?.setYaw?.(G.yaw);
+        if (G.me) G.renderer?.camTarget?.set(G.me.rx, 0, G.me.rz);
+        banner(ev.text); log(ev.text, 'join');
+      }
+      break;
+    case 'chapter_clear':
+      banner(ev.text); log(ev.text, 'kill');
       break;
     case 'enemy_down':
       log('击败 ' + ev.name, 'kill');
@@ -424,6 +455,13 @@ function currentMove() {
 function clientCollides(x, z) {
   const half = G.world.half, edge = half - 1.36;
   if (Math.abs(x) > edge || Math.abs(z) > edge) return true;
+  for (const [index, city] of (G.world.cities || []).entries()) {
+    if (Math.abs(x - city.x) < 18 && Math.abs(z - city.z) < 18
+        && !(G.world.cities.slice(0, index).every(prev => (G.campaignCleared || []).includes(prev.id)))) return true;
+  }
+  for (const moat of G.world.moats || []) {
+    if (x > moat.x0 - .36 && x < moat.x1 + .36 && z > moat.z0 - .36 && z < moat.z1 + .36) return true;
+  }
   for (const b of G.world.blocks) {
     if (G.me.targetJump < b.h && Math.abs(x - b.x) < 0.86 && Math.abs(z - b.z) < 0.86) return true;
   }
@@ -744,7 +782,7 @@ function updateNameplates() {
     let n = G.plates.get(p.id);
     if (!n) {
       n = document.createElement('div');
-      n.innerHTML = '<div class="np-name"></div><div class="np-bar"><div class="np-fill"></div></div><div class="np-status"></div>';
+      n.innerHTML = '<div class="np-name"></div><div class="np-bar"><div class="np-fill"></div></div><div class="np-armor-bar"><div class="np-armor-fill"></div></div><div class="np-status"></div>';
       $('nameplates').appendChild(n);
       G.plates.set(p.id, n);
     }
@@ -761,6 +799,10 @@ function updateNameplates() {
     const fill = n.querySelector('.np-fill');
     fill.style.width = Math.max(0, p.hp) + '%';
     fill.style.background = p.hp > 50 ? '#7bdc6a' : (p.hp > 25 ? '#ffd166' : '#e5484d');
+    const armor = p.armor || {};
+    n.querySelector('.np-armor-bar').style.display = armor.durability ? 'block' : 'none';
+    n.querySelector('.np-armor-fill').style.width = (armor.durability ? armor.durability / armor.max_durability * 100 : 0) + '%';
+    n.querySelector('.np-armor-bar').title = armor.durability ? armor.name + ' ' + armor.durability + '/' + armor.max_durability : '';
     n.querySelector('.np-status').textContent = p.invuln ? '✦ 无敌' : (p.heal > 0 ? '✚ 回血' : '');
   }
 }
@@ -826,6 +868,9 @@ function updateHud() {
   $('rocket-btn').textContent = '火箭筒 · 4' + (me.rocketCd > 0 ? ' · ' + Math.ceil(me.rocketCd) + ' 秒' : '');
   $('beam-btn').textContent = '龟派气功 · 3' + (me.beamCd > 0 ? ' · ' + Math.ceil(me.beamCd) + ' 秒' : charge);
   $('wave-btn').disabled = !me.alive || me.waveCd > 0;
+  const armor = me.armor || {};
+  $('armor-text').textContent = armor.durability ? armor.name + ' · ' + armor.durability + ' / ' + armor.max_durability : '未穿戴 · 0 / 0';
+  $('armor-bar').style.width = (armor.durability ? armor.durability / armor.max_durability * 100 : 0) + '%';
   $('hud-status').textContent = !me.alive ? '阵亡 · 等待复活'
     : (me.invuln ? '✦ 复活保护中'
       : (me.heal > 0 ? `✚ 回血中 +${Math.round(me.heal)}/s${me.pool ? ' · ' + me.pool : ''}` : ''));
@@ -852,6 +897,10 @@ function drawMinimap() {
     ctx.beginPath(); ctx.moveTo(i * k, 0); ctx.lineTo(i * k, size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, i * k); ctx.lineTo(size, i * k); ctx.stroke();
   }
+  for (const moat of G.world.moats || []) {
+    ctx.fillStyle = '#3b9cba';
+    ctx.fillRect(tx(moat.x0), tz(moat.z0), (moat.x1 - moat.x0) * k, (moat.z1 - moat.z0) * k);
+  }
   for (const t of Object.values(G.world.teams)) {
     const [x0, x1, z0, z1] = t.zone;
     ctx.fillStyle = TEAM_CSS[t.key] + 'aa';
@@ -867,10 +916,10 @@ function drawMinimap() {
   ctx.fillStyle = 'rgba(30,36,30,.55)';
   for (const b of G.world.blocks) ctx.fillRect(tx(b.x) - 1, tz(b.z) - 1, 2.5, 2.5);
   for (const city of G.world.cities || []) {
-    ctx.strokeStyle = '#f4d46a'; ctx.lineWidth = 1;
+    ctx.strokeStyle = G.campaignCleared?.includes(city.id) ? '#7cffad' : '#f4d46a'; ctx.lineWidth = 1;
     ctx.strokeRect(tx(city.x - 18), tz(city.z - 18), 36 * k, 36 * k);
     ctx.fillStyle = '#fff0b5'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(city.chapter + ' ' + city.name, tx(city.x), tz(city.z - 20));
+    ctx.fillText('第' + city.chapter + '关', tx(city.x), tz(city.z - 20));
   }
   for (const enemy of G.objects || []) {
     if (enemy.kind !== 'enemy' || !enemy.hp) continue;

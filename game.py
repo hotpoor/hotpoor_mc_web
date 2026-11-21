@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 
 from tornado.ioloop import PeriodicCallback
+from campaign import CHARACTERS, NAME_SKINS
 
 from world import (RULES, TEAMS, build_world, collides, in_own_base,
                    pool_at)
@@ -35,6 +36,10 @@ INVULN = RULES["invulnerable"]
 KILL_SCORE = RULES["kill_score"]
 DEATH_PENALTY = RULES["death_penalty"]
 TICK_MS = 1000 // RULES["tick_rate"]
+ARMOR_TYPES = {
+    "iron": {"name": "铁甲", "max_durability": 80, "reduction": .4},
+    "elite": {"name": "精甲", "max_durability": 160, "reduction": .6},
+}
 
 
 @dataclass
@@ -48,6 +53,7 @@ class Player:
     yaw: float = 0.0
     hp: float = MAX_HP
     alive: bool = True
+    armor: dict = field(default_factory=dict)
     score: int = 0                 # cumulative, persisted in SQLite
     kills: int = 0                 # cumulative
     deaths: int = 0                # cumulative
@@ -139,7 +145,7 @@ def recipe_materials(sounds, split):
             for part in ("initial:" + PINYIN[sound][1], "final:" + PINYIN[sound][2])]
 
 
-SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot", "liu-bei", "zhang-fei", "guan-yu", "lu-bu")
+SKIN_NAMES = ("red", "blue", "steve", "alex", "miner", "ranger", "robot", "liu-bei", "zhang-fei", "guan-yu", "lu-bu") + tuple(CHARACTERS)
 
 
 def segment_box(start, delta, bounds):
@@ -171,6 +177,11 @@ class Game:
             if saved is not None:
                 self.craft_modes = tuple(mode for mode in self.craft_modes if mode in saved.split(","))
         self.world = build_world()
+        saved_campaign = db.get_setting("campaign_cleared_v1") if db else None
+        try:
+            self.cleared_cities = set(json.loads(saved_campaign or '[]')) & {city["id"] for city in self.world["cities"]}
+        except (ValueError, TypeError):
+            self.cleared_cities = set()
         self.blocks = self.world["blocks"]
         self.pools = self.world["pools"]
         self.objects = [
@@ -219,16 +230,51 @@ class Game:
             for i, (dx, dz) in enumerate(((-4, 13), (4, 13), (0, 10), (-5, -13), (5, -13),
                                          (-13, -4), (-13, 4), (13, -4), (13, 4))):
                 self.objects.append({"id": f"enemy-{cid}-{i}", "kind": "enemy", "city": cid,
-                                     "name": "黄巾贼" if cid == "yellow" else "守城贼兵",
+                                     "name": "黄巾贼" if cid == "yellow" else "第%d章守军" % city["chapter"],
+                                     "color": 0xb99540 if cid == "yellow" else (0x52728a if city["chapter"] % 2 else 0x88634c),
                                      "x": cx + dx, "z": cz + dz, "home_x": cx + dx, "home_z": cz + dz,
                                      "hp": 80, "max_hp": 80, "ready": 0, "yaw": 0, "last_attack": 0})
-            if cid == "yellow":
-                for i, name in enumerate(("张角 · 天公将军", "张宝 · 地公将军", "张梁 · 人公将军")):
-                    dx, dz = ((0, -4), (-4, 1), (4, 1))[i]
-                    self.objects.append({"id": f"boss-{cid}-{i}", "kind": "enemy", "city": cid,
-                                         "name": name, "boss": True, "x": cx + dx, "z": cz + dz,
-                                         "home_x": cx + dx, "home_z": cz + dz,
-                                         "hp": 500, "max_hp": 500, "ready": 0, "yaw": 0, "last_attack": 0})
+            for i, name in enumerate(city["bosses"]):
+                dx, dz = ((0, -4), (-4, 1), (4, 1))[i]
+                hp = 500 + (city["chapter"] - 1) * 50
+                self.objects.append({"id": f"boss-{cid}-{i}", "kind": "enemy", "city": cid,
+                                     "name": name, "skin": NAME_SKINS.get(name, "robot"), "boss": True,
+                                     "loot": city["loot"][i], "color": 0xb58b36 if cid == "yellow" else 0x675b94,
+                                     "x": cx + dx, "z": cz + dz, "home_x": cx + dx, "home_z": cz + dz,
+                                     "hp": hp, "max_hp": hp, "ready": 0, "yaw": 0, "last_attack": 0})
+            for i, name in enumerate(city["allies"]):
+                self.objects.append({"id": f"ally-{cid}-{i}", "kind": "story_npc", "city": cid,
+                                     "name": name, "skin": NAME_SKINS[name], "text": city["story"],
+                                     "x": cx - 10, "z": cz + i * 3 - 3, "hp": 1, "max_hp": 1, "ready": 0})
+            index = city["chapter"] - 1
+            for direction, dest in (("next", index + 1), ("prev", index - 1)):
+                if 0 <= dest < len(self.world["cities"]):
+                    destination = self.world["cities"][dest]
+                    gx = (destination["x"] - cx) / max(1, abs(destination["x"] - cx)) if destination["x"] != cx else 0
+                    gz = (destination["z"] - cz) / max(1, abs(destination["z"] - cz)) if destination["z"] != cz else 0
+                    self.objects.append({"id": f"portal-{cid}-{direction}", "kind": "chapter_gate",
+                                         "city": cid, "destination": destination["id"],
+                                         "text": ("下一城 · " if direction == "next" else "上一城 · ") + destination["name"],
+                                         "x": cx + gx * 16 + gz * 4.5, "z": cz + gz * 16 - gx * 4.5,
+                                         "hp": 1, "max_hp": 1, "ready": 0})
+        for enemy in self.objects:
+            if enemy["kind"] == "enemy" and enemy["city"] in self.cleared_cities:
+                enemy.update(hp=0, ready=None)
+        for index, village in enumerate(self.world["villages"]):
+            for offset, weapon in ((-4, "sword"), (4, "bow")):
+                self.objects.append({"id": village["id"] + weapon, "kind": "weapon_pickup", "weapon": weapon,
+                                     "text": village["name"] + "补给 · " + RECIPES[weapon][0],
+                                     "x": village["x"] + (offset if village["axis"] == "x" else 2.5),
+                                     "z": village["z"] + (offset if village["axis"] == "z" else 2.5),
+                                     "hp": 1, "max_hp": 1, "ready": 0})
+            for i, animal in enumerate(("dog", "tiger" if index % 3 == 1 else "wolf")):
+                x = village["x"] + (-5 if village["axis"] == "z" else i * 3 - 2)
+                z = village["z"] + (-5 if village["axis"] == "x" else i * 3 - 2)
+                self.objects.append({"id": village["id"] + "-" + animal, "kind": "animal", "animal": animal,
+                                     "name": {"dog": "村犬", "tiger": "山虎", "wolf": "灰狼"}[animal],
+                                     "x": x, "z": z, "home_x": x, "home_z": z, "yaw": 0,
+                                     "hp": 1, "max_hp": 1, "ready": 0})
+        self.world["armor_types"] = ARMOR_TYPES
         self.world["materials"] = MATERIALS
         self.world["weapon_uses"] = WEAPON_USES
         self.world["recipes"] = {
@@ -561,6 +607,15 @@ class Game:
         prefix = material.split(":", 1)[0]
         return prefix if prefix in ("text", "whole") else "split"
 
+    def city_unlocked(self, city_id):
+        cities = self.world["cities"]
+        index = next(i for i, city in enumerate(cities) if city["id"] == city_id)
+        return all(city["id"] in self.cleared_cities for city in cities[:index])
+
+    def locked_city_at(self, x, z):
+        return any(abs(x - c["x"]) < 18 and abs(z - c["z"]) < 18
+                   and not self.city_unlocked(c["id"]) for c in self.world["cities"])
+
     def interact(self, player, now):
         if not player.alive or player.recall_until:
             return
@@ -592,10 +647,18 @@ class Game:
             return
         available = [obj for obj in self.objects
                      if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
+                         or (obj["kind"] == "armor_pickup" and (not player.armor or obj["durability"] > player.armor["durability"] or ARMOR_TYPES[obj["armor_kind"]]["reduction"] > player.armor["reduction"]))
                          or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in self.craft_modes)
                          or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < obj.get("uses", WEAPON_USES["pickup"])))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
+            if ore["kind"] == "armor_pickup":
+                self.drop_armor(player, now)
+                cfg = ARMOR_TYPES[ore["armor_kind"]]
+                player.armor = {**cfg, "kind": ore["armor_kind"], "durability": ore["durability"]}
+                self.objects.remove(ore)
+                self.emit({"k": "armor_equip", "id": player.id, "name": cfg["name"]})
+                return
             if ore["kind"] == "weapon_pickup":
                 weapon = ore["weapon"]
                 player.weapons[weapon] = ore.get("uses", WEAPON_USES["pickup"])
@@ -620,9 +683,41 @@ class Game:
                 ore["ready"] = None
                 player.crystal_source = ore["id"]
 
+        if ore:
+            return
+        special = min((o for o in self.objects if o["kind"] in ("chapter_gate", "story_npc") and nearby(o, 2.5)),
+                      key=lambda o: math.hypot(player.x - o["x"], player.z - o["z"]), default=None)
+        if special and special["kind"] == "chapter_gate":
+            destination = special["destination"]
+            if not self.city_unlocked(destination):
+                self.emit({"k": "story", "id": player.id, "text": "先击败本城全部守军与三名首领，才能前往下一城。"})
+                return
+            city = next(c for c in self.world["cities"] if c["id"] == destination)
+            player.x, player.z = city["x"], city["z"] + 16
+            player.jump = player.jump_speed = 0
+            player.mx = player.mz = 0
+            player.draw_started = None
+            player.yaw = math.pi
+            player.invuln_until = max(player.invuln_until, now + 2)
+            self.emit({"k": "chapter_travel", "id": player.id, "city": destination,
+                       "text": "第%d章 · %s · %s" % (city["chapter"], city["name"], city["story"])})
+        elif special:
+            self.emit({"k": "story", "id": player.id, "text": special["name"] + "：" + special["text"]})
+
     def release_crystal_source(self, source, now):
         ore = next(obj for obj in self.objects if obj["id"] == source)
         ore["ready"] = now + 10
+
+    def drop_armor(self, player, now):
+        if not player.armor:
+            return
+        floor = max((b["h"] for b in self.blocks if b["h"] <= player.jump
+                     and abs(player.x - b["x"]) < .5 and abs(player.z - b["z"]) < .5), default=0)
+        self.objects.append({"id": "armor-" + uuid.uuid4().hex, "kind": "armor_pickup",
+                             "armor_kind": player.armor["kind"], "durability": player.armor["durability"],
+                             "x": player.x, "y": floor, "z": player.z, "hp": 1, "max_hp": 1,
+                             "ready": 0, "expires": now + 180})
+        player.armor = {}
 
     def drop_weapon(self, p, now):
         weapon = p.weapon
@@ -649,7 +744,8 @@ class Game:
                              "hp": 1, "max_hp": 1, "ready": 0, "source": source, "expires": now + 60})
 
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone") and obj.get("team") != player.team]
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone") and obj.get("team") != player.team
+                and (not obj.get("city") or self.city_unlocked(obj["city"]))]
 
     @staticmethod
     def object_bounds(obj):
@@ -657,7 +753,7 @@ class Game:
         return ((x - .48, x + .48), (0, 2 if obj["kind"] in ("crystal", "dummy", "enemy") else 1.7), (z - .48, z + .48))
 
     def damage_object(self, player, obj, amount, now):
-        if obj["hp"] <= 0:
+        if obj["hp"] <= 0 or (obj.get("city") and not self.city_unlocked(obj["city"])):
             return
         obj["hp"] = max(0, obj["hp"] - amount)
         obj["hurt_until"] = now + .18
@@ -665,6 +761,26 @@ class Game:
             return
         if obj["kind"] == "enemy":
             obj["ready"] = None  # Only this city's time stone can revive enemies.
+            weapon = obj.get("loot") or random.choice(("sword", "bow", "axe", "mace"))
+            uses = 40 if obj.get("boss") else 10
+            self.objects.append({"id": "loot-" + uuid.uuid4().hex, "kind": "weapon_pickup",
+                                 "weapon": weapon, "text": ("首领珍品 · " if obj.get("boss") else "战利品 · ") + RECIPES[weapon][0],
+                                 "rarity": "boss" if obj.get("boss") else "normal", "uses": uses,
+                                 "x": obj["x"], "z": obj["z"], "hp": 1, "max_hp": 1,
+                                 "ready": 0, "expires": now + 180})
+            if obj.get("boss") or random.random() < .3:
+                kind = "elite" if obj.get("boss") else "iron"
+                self.objects.append({"id": "armor-" + uuid.uuid4().hex, "kind": "armor_pickup",
+                                     "armor_kind": kind, "durability": ARMOR_TYPES[kind]["max_durability"],
+                                     "x": obj["x"] + .7, "z": obj["z"], "hp": 1, "max_hp": 1,
+                                     "ready": 0, "expires": now + 180})
+            if (obj["city"] not in self.cleared_cities and
+                    not any(o["kind"] == "enemy" and o["city"] == obj["city"] and o["hp"] > 0 for o in self.objects)):
+                self.cleared_cities.add(obj["city"])
+                self.db.set_setting("campaign_cleared_v1", json.dumps(sorted(self.cleared_cities)))
+                city = next(c for c in self.world["cities"] if c["id"] == obj["city"])
+                self.emit({"k": "chapter_clear", "city": obj["city"], "text": city["name"] + "已通关！" +
+                           ("下一城入口已开启。" if city["chapter"] < len(self.world["cities"]) else "十章完成，三分天下！")})
             reward = 100 if obj.get("boss") else 15
             player.score += reward
             player.session_score += reward
@@ -825,6 +941,14 @@ class Game:
 
     def damage(self, attacker, victim, amount, now, mace=False):
         victim.recall_until = 0.0
+        absorbed = 0
+        if victim.armor:
+            absorbed = min(victim.armor["durability"], round(amount * victim.armor["reduction"]))
+            victim.armor["durability"] -= absorbed
+            amount -= absorbed
+            if victim.armor["durability"] <= 0:
+                victim.armor = {}
+                self.emit({"k": "armor_break", "id": victim.id})
         victim.hp -= amount
         victim.last_damage_at = now
         attacker.damage += int(amount)
@@ -847,11 +971,12 @@ class Game:
             if not collides(victim.x, nz, self.blocks, feet=victim.jump):
                 victim.z = nz
         self.emit({"k": "hit", "id": victim.id, "by": attacker.id,
-                   "dmg": amount, "hp": max(0, round(victim.hp))})
+                   "dmg": amount, "absorbed": absorbed, "hp": max(0, round(victim.hp))})
         if victim.hp <= 0:
             self.kill(attacker, victim, now)
 
     def kill(self, killer, victim, now):
+        self.drop_armor(victim, now)
         self.drop_weapon(victim, now)
         self.drop_crystal(victim, now)
         victim.hp = 0
@@ -938,7 +1063,7 @@ class Game:
     def advance_enemies(self, dt, now):
         cities = {city["id"]: city for city in self.world["cities"]}
         for enemy in self.objects:
-            if enemy["kind"] != "enemy" or enemy["hp"] <= 0:
+            if enemy["kind"] != "enemy" or enemy["hp"] <= 0 or not self.city_unlocked(enemy["city"]):
                 continue
             city = cities[enemy["city"]]
             candidates = [p for p in self.players.values() if p.alive
@@ -973,6 +1098,25 @@ class Game:
                                   enemy["x"], enemy["z"], yaw=enemy["yaw"])
                 self.damage(attacker, target, 20 if enemy.get("boss") else 8, now)
 
+    def advance_animals(self, dt, now):
+        for animal in self.objects:
+            if animal["kind"] != "animal":
+                continue
+            phase = now * .3 + animal["home_x"]
+            tx = animal["home_x"] + math.sin(phase) * 1.5
+            tz = animal["home_z"] + math.cos(phase) * 1.5
+            dx, dz = tx - animal["x"], tz - animal["z"]
+            distance = math.hypot(dx, dz)
+            if distance < .1:
+                continue
+            animal["yaw"] = math.atan2(dx, dz)
+            step = min(distance, .75 * dt)
+            nx, nz = animal["x"] + dx / distance * step, animal["z"] + dz / distance * step
+            if not collides(nx, animal["z"], self.blocks, radius=.3):
+                animal["x"] = nx
+            if not collides(animal["x"], nz, self.blocks, radius=.3):
+                animal["z"] = nz
+
     def tick(self):
         now = time.monotonic()
         dt = min(0.10, max(0.0, now - self.last_tick))
@@ -995,14 +1139,18 @@ class Game:
                     self.respawn(p, now)
                 continue
 
+            if self.locked_city_at(p.x, p.z):
+                city = next(c for c in self.world["cities"] if abs(p.x - c["x"]) < 18 and abs(p.z - c["z"]) < 18)
+                p.x, p.z = city["x"], city["z"] + 20
+                p.mx = p.mz = 0
             if now - p.last_input > 0.6:
                 p.mx = p.mz = 0.0
             speed = SPRINT_SPEED if p.sprint else MOVE_SPEED
             nx = p.x + p.mx * speed * dt
             nz = p.z + p.mz * speed * dt
-            if not collides(nx, p.z, self.blocks, feet=p.jump):
+            if not self.locked_city_at(nx, p.z) and not collides(nx, p.z, self.blocks, feet=p.jump):
                 p.x = nx
-            if not collides(p.x, nz, self.blocks, feet=p.jump):
+            if not self.locked_city_at(p.x, nz) and not collides(p.x, nz, self.blocks, feet=p.jump):
                 p.z = nz
 
             support = max((b["h"] for b in self.blocks if b["h"] <= p.jump
@@ -1030,6 +1178,7 @@ class Game:
         self.push_players(previous)
         self.advance_arrows(dt, now)
         self.advance_enemies(dt, now)
+        self.advance_animals(dt, now)
         for p in self.players.values():
             if not p.recall_until:
                 continue
@@ -1056,7 +1205,7 @@ class Game:
                 "id": p.id, "name": p.name, "team": p.team,
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
-                "alive": p.alive, "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
+                "alive": p.alive, "armor": dict(p.armor), "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
                 "weapons": p.weapons, "syllable": p.syllable, "syllables": p.syllables,
                 "forge_near": self.forge_near(p),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
@@ -1083,7 +1232,8 @@ class Game:
                        for arrow_id, arrow in self.arrows.items()],
             "team_score": self.team_score,
             "craft_modes": self.craft_modes,
-            "objects": [{**obj, "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
+            "campaign_cleared": sorted(self.cleared_cities),
+            "objects": [{**obj, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }
 

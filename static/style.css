@@ -297,3 +297,14 @@ body.first-person #view { cursor: crosshair; }
 
 #craft-modes .craft-password { display: block; margin-top: 6px; }
 #craft-password { width: 62%; color: inherit; background: #232b23; border: 1px solid #59604e; }
+
+#campaign-journal { margin-top: 10px; font-size: 11px; color: #ffe4a1; }
+#campaign-journal summary { cursor: pointer; padding: 6px 0; }
+.chapter-entry { padding: 7px 0; border-top: 1px solid #ffffff20; line-height: 1.6; }
+.chapter-entry small { display: block; color: #b9c6c4; }
+
+.bar-fill.armor { width: 0; background: #ffffff; box-shadow: 0 0 5px #ffffff66; }
+.armor-row { margin-top: 9px; color: #f6f6f6; }
+.armor-bar { height: 12px; padding: 1px; }
+.np-armor-bar { height: 4px; margin-top: 3px; border: 1px solid #555; background: #292c32; }
+.np-armor-fill { height: 100%; background: #ffffff; transition: width .1s; }

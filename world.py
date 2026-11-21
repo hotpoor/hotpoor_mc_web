@@ -8,9 +8,10 @@ Coordinates: X/Z is the ground plane, Y is up. One unit == one block.
 
 import math
 import random
+from campaign import CITIES
 
-HALF = 80.0
-SIZE = 160.0
+HALF = 140.0
+SIZE = 280.0
 SEED = 20261114
 
 TEAMS = {
@@ -46,33 +47,73 @@ HEAL_POOLS = [
 ]
 
 # Campaign cities surround the original multiplayer arena; wide gates face every road.
-CITIES = [
-    {"id": "yellow", "name": "黄巾起义城", "x": 0, "z": -55, "chapter": 1},
-    {"id": "hulao", "name": "虎牢关城", "x": 55, "z": 0, "chapter": 2},
-    {"id": "guandu", "name": "官渡城", "x": 0, "z": 55, "chapter": 3},
-    {"id": "chibi", "name": "赤壁城", "x": -55, "z": 0, "chapter": 4},
-]
+
 
 
 def city_blocks():
     blocks = []
     for city in CITIES:
-        rings = (18, 8) if city["id"] == "yellow" else (18,)
+        rings = (18, 8)
         for radius in rings:
+            used = set()
             for offset in range(-radius, radius + 1):
-                if abs(offset) <= 3:
-                    continue  # Seven-block gates, including an unobstructed road to the keep.
-                for x, z in ((offset, -radius), (offset, radius), (-radius, offset), (radius, offset)):
-                    block = {"x": city["x"] + x, "z": city["z"] + z,
-                             "h": 4 if radius == 18 else 3, "type": "brick"}
-                    if block not in blocks:
-                        blocks.append(block)
+                for side, x, z in (("north", offset, -radius), ("south", offset, radius),
+                                   ("west", -radius, offset), ("east", radius, offset)):
+                    if abs(offset) <= 3 and side in city["gates"]:
+                        continue
+                    if (x, z) in used:
+                        continue
+                    used.add((x, z))
+                    blocks.append({"x": city["x"] + x, "z": city["z"] + z,
+                                   "h": 4 if radius == 18 else 3, "type": "brick"})
         # Houses flank the roads, leaving the centre and the gates free.
         for dx, dz in ((-12, -10), (12, -10), (-12, 10), (12, 10)):
             for ox in range(-1, 2):
                 for oz in range(-1, 2):
                     blocks.append({"x": city["x"] + dx + ox, "z": city["z"] + dz + oz,
                                    "h": 3 if abs(ox) == 1 or abs(oz) == 1 else 4, "type": "stone"})
+    return blocks
+
+
+ROUTES = []
+VILLAGES = []
+MOATS = []
+for index, city in enumerate(CITIES):
+    previous = CITIES[index - 1] if index else {"id": "arena", "x": 0, "z": 0}
+    dx, dz = city["x"] - previous["x"], city["z"] - previous["z"]
+    cx, cz = (city["x"] + previous["x"]) / 2, (city["z"] + previous["z"]) / 2
+    axis = "x" if dx else "z"
+    route = {"id": "road-" + city["id"], "city": city["id"], "axis": axis,
+             "x": cx, "z": cz, "length": abs(dx or dz)}
+    ROUTES.append(route)
+    village = {"id": "village-" + city["id"], "name": ["桃园村", "会盟驿", "乌巢村", "当阳村", "江畔镇",
+                  "荆南村", "蜀道驿", "定军村", "襄水镇", "三国驿"][index],
+               "x": cx, "z": cz, "axis": axis, "city": city["id"]}
+    VILLAGES.append(village)
+    HEAL_POOLS.append({"x": cx, "z": cz, "r": 1.8, "power": 16, "name": village["name"] + "回血泉"})
+    # Moats span between city walls; both banks enclose a broad road and village shoulders.
+    start = 18 if index else 22
+    length = max(1, route["length"] - start - 18)
+    middle_x = (previous["x"] + (dx and (1 if dx > 0 else -1) * (start + length / 2))) if dx else cx
+    middle_z = (previous["z"] + (dz and (1 if dz > 0 else -1) * (start + length / 2))) if dz else cz
+    for side in [-1, 1]:
+        mx, mz = middle_x + (side * 10.5 if axis == "z" else 0), middle_z + (side * 10.5 if axis == "x" else 0)
+        width, depth = (length, 3) if axis == "x" else (3, length)
+        MOATS.append({"x0": mx - width / 2, "x1": mx + width / 2,
+                      "z0": mz - depth / 2, "z1": mz + depth / 2})
+
+
+def village_blocks():
+    blocks = []
+    for village in VILLAGES:
+        for side in [-1, 1]:
+            # Small houses on the shoulders, outside the central seven-block road.
+            hx = village["x"] + (side * 6 if village["axis"] == "z" else 4)
+            hz = village["z"] + (side * 6 if village["axis"] == "x" else 4)
+            for dx in [-1, 0, 1]:
+                for dz in [-1, 0, 1]:
+                    blocks.append({"x": hx + dx, "z": hz + dz, "h": 2 if abs(dx) + abs(dz) else 3,
+                                   "type": "bark"})
     return blocks
 
 
@@ -101,6 +142,8 @@ def _generate_blocks():
     used = set()
 
     def is_free(x, z):
+        if abs(x) < 9 and z < -21:
+            return False
         if abs(x) > 29 or abs(z) > 29:
             return False
         if (x, z) in used:
@@ -154,6 +197,8 @@ def collides(x, z, blocks, radius=0.36, feet=0):
     edge = HALF - 1.0 - radius
     if x < -edge or x > edge or z < -edge or z > edge:
         return True
+    if any(m["x0"] - radius < x < m["x1"] + radius and m["z0"] - radius < z < m["z1"] + radius for m in MOATS):
+        return True
     limit = 0.5 + radius
     for b in blocks:
         if feet < b["h"] and abs(x - b["x"]) < limit and abs(z - b["z"]) < limit:
@@ -183,7 +228,8 @@ def build_world():
         "half": HALF,
         "teams": TEAMS,
         "pools": HEAL_POOLS,
-        "blocks": _generate_blocks() + city_blocks(),
+        "blocks": _generate_blocks() + city_blocks() + village_blocks(),
         "cities": CITIES,
+        "routes": ROUTES, "villages": VILLAGES, "moats": MOATS,
         "rules": RULES,
     }

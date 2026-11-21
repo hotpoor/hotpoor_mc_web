@@ -150,9 +150,9 @@ async def network_test(port):
     check(s["t"] == "state" and len(s["players"]) == 2,
           "20Hz 快照把两名玩家同步给所有客户端")
 
-    check(len(wa["world"].get("cities", [])) == 4
-          and len([obj for obj in s["objects"] if obj["kind"] == "enemy"]) == 39,
-          "城市地图与 39 名敌人通过真实 WebSocket 同步")
+    check(len(wa["world"].get("cities", [])) == 10
+          and len([obj for obj in s["objects"] if obj["kind"] == "enemy"]) == 120,
+          "十章地图与 120 名敌人通过真实 WebSocket 同步")
     start_x = next(p for p in s["players"] if p["id"] == wa["id"])["x"]
     for _ in range(12):
         await a.write_message(json.dumps(

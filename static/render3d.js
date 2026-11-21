@@ -2,9 +2,9 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=48';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=49';
 
-import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
+import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
 const TEAM_HEX = { red: 0xef4f4f, blue: 0x4c86f0 };
 const ARC = Math.PI * 65 / 180;
@@ -97,7 +97,9 @@ export class Renderer3D {
     for (const key of Object.keys(world.teams)) this.buildBase(world.teams[key]);
     for (const pool of world.pools) this.buildPool(pool);
     this.buildBlocks(world.blocks);
+    this.cityBarriers = new Map();
     this.buildCities();
+    this.buildRoadside();
     this.resize();
   }
 
@@ -128,8 +130,10 @@ export class Renderer3D {
         }
         pivot.add(mesh);
       }
+      const armor = box(.29, .24, .29, 0xd9e0e7, -.52, overlay);
+      armor.visible = false; armor.material.fog = !overlay; pivot.add(armor);
       parent.add(pivot);
-      return { pivot, sleeve, hand };
+      return { pivot, sleeve, hand, armor };
     };
     const right = createArm(-.43);
     const left = createArm(.43);
@@ -160,6 +164,13 @@ export class Renderer3D {
     const rig = { right, left, weapons, charge, crystal, secondSword };
     this.applyArmSkin(rig, 'steve');
     return rig;
+  }
+
+  applyArmArmor(rig, armor) {
+    for (const arm of [rig.left, rig.right]) {
+      arm.armor.visible = !!armor?.durability;
+      arm.armor.material.color.setHex(armor?.kind === 'elite' ? 0xe2c87b : 0xd9e0e7);
+    }
   }
 
   applyArmSkin(rig, name) {
@@ -229,7 +240,7 @@ export class Renderer3D {
     // A larger plain below the playable map, so the camera never shows empty
     // sky when a player stands near the edge of the arena.
     const outer = new THREE.Mesh(
-      new THREE.BoxGeometry(240, 0.6, 240),
+      new THREE.BoxGeometry(this.world.size + 80, 0.6, this.world.size + 80),
       new THREE.MeshLambertMaterial({ color: 0x5b8b47 }),
     );
     outer.position.y = -1.15;
@@ -294,12 +305,13 @@ export class Renderer3D {
   }
 
   buildCities() {
-    for (const city of this.world.cities || []) {
+    for (const [index, city] of (this.world.cities || []).entries()) {
       const g = new THREE.Group();
       g.position.set(city.x, 0, city.z);
       // Roads extend from the old battlefield through the four city gates.
-      const road = box(city.x ? 49 : 5, .06, city.z ? 49 : 5, 0xb49d77, .015);
-      road.position.set(city.x / 2, .015, city.z / 2);
+      const prev = this.world.cities[index - 1] || { x: 0, z: 0 };
+      const road = box(Math.abs(city.x - prev.x) + 5, .06, Math.abs(city.z - prev.z) + 5, 0xb49d77, .015);
+      road.position.set((city.x + prev.x) / 2, .015, (city.z + prev.z) / 2);
       this.scene.add(road);
       for (const [w, d] of [[34, 5], [5, 34]]) g.add(box(w, .08, d, 0xc2aa80, .04));
       for (const x of [-18, 18]) for (const z of [-18, 18]) {
@@ -309,29 +321,65 @@ export class Renderer3D {
         roof.position.set(x, 6.25, z);
         g.add(tower, roof);
       }
-      for (const z of [-18, 18]) {
-        const lintel = box(7, .75, 1.3, 0x6e4a31, 4.5);
-        lintel.position.z = z;
-        g.add(lintel);
+      for (const side of city.gates) {
+        const x = side === 'east' ? 18 : side === 'west' ? -18 : 0;
+        const z = side === 'south' ? 18 : side === 'north' ? -18 : 0;
+        const lintel = box(x ? 1.3 : 7, .75, z ? 1.3 : 7, 0x6e4a31, 4.5);
+        lintel.position.set(x, 4.5, z); g.add(lintel);
         const name = labelSprite(city.chapter + ' · ' + city.name, '#ffeaa0', 640, 120, 46);
-        name.scale.set(8, 1.5, 1);
-        name.position.set(0, 5.6, z);
-        name.material.depthTest = true;
-        g.add(name);
+        name.scale.set(8, 1.5, 1); name.position.set(x, 5.6, z);
+        name.material.depthTest = true; g.add(name);
       }
-      if (city.id === 'yellow') {
-        const inner = labelSprite('内城 · 张角 / 张宝 / 张梁', '#ffcf66', 640, 100, 40);
+      {
+        const inner = labelSprite('内城 · ' + city.bosses.join(' / '), '#ffcf66', 640, 100, 40);
         inner.position.set(0, 4.2, 8);
         inner.scale.set(7, 1.1, 1);
         inner.material.depthTest = true;
         g.add(inner);
       }
+      const barriers = new THREE.Group();
+      for (const [x, z, w, d] of [[0, -18, 7, .15], [0, 18, 7, .15], [-18, 0, .15, 7], [18, 0, .15, 7]]) {
+        const seal = box(w, 4, d, 0x8d7fa7, 2);
+        seal.position.x = x; seal.position.z = z;
+        seal.material.transparent = true; seal.material.opacity = .5;
+        barriers.add(seal);
+      }
+      g.add(barriers); this.cityBarriers.set(city.id, barriers);
       this.scene.add(g);
     }
     const sign = labelSprite('↑ 第一城 · 黄巾起义城（北）', '#ffe8a0', 640, 110, 42);
     sign.position.set(0, 3.2, -29);
     sign.scale.set(7, 1.2, 1);
     this.scene.add(sign);
+  }
+
+  buildRoadside() {
+    for (const moat of this.world.moats || []) {
+      const w = moat.x1 - moat.x0, d = moat.z1 - moat.z0;
+      const x = (moat.x0 + moat.x1) / 2, z = (moat.z0 + moat.z1) / 2;
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2),
+        new THREE.MeshLambertMaterial({ color: 0x267f9f, emissive: 0x103b4a, emissiveIntensity: .3 }));
+      water.position.set(x, .045, z); this.scene.add(water);
+      for (const side of [-1, 1]) {
+        const rail = box(w > d ? w : .14, .7, d > w ? d : .14, 0x87765b, .35);
+        rail.position.set(x + (d > w ? side * w / 2 : 0), .35, z + (w > d ? side * d / 2 : 0));
+        this.scene.add(rail);
+      }
+    }
+    for (const village of this.world.villages || []) {
+      const floor = box(village.axis === 'x' ? 15 : 17, .04, village.axis === 'z' ? 15 : 17, 0xb8a47c, .02);
+      floor.position.set(village.x, .02, village.z); this.scene.add(floor);
+      for (const side of [-1, 1]) {
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.5, 4), new THREE.MeshLambertMaterial({ color: 0x6d4435 }));
+        roof.rotation.y = Math.PI / 4;
+        roof.position.set(village.x + (village.axis === 'z' ? side * 6 : 4), 2.85,
+          village.z + (village.axis === 'x' ? side * 6 : 4));
+        this.scene.add(roof);
+      }
+      const name = labelSprite(village.name + ' · 回血 / 武器补给', '#f1e4bb', 640, 100, 38);
+      name.position.set(village.x + (village.axis === 'z' ? -5 : 0), 4.2, village.z + (village.axis === 'x' ? -5 : 0));
+      name.scale.set(5.5, .9, 1); name.material.depthTest = true; this.scene.add(name);
+    }
   }
 
   buildBase(team) {
@@ -464,7 +512,7 @@ export class Renderer3D {
 
   buildBlocks(blocks) {
     const dummy = new THREE.Object3D();
-    const groups = { stone: [], brick: [], tree: [] };
+    const groups = { stone: [], brick: [], tree: [], bark: [] };
     for (const b of blocks) (groups[b.type] || groups.stone).push(b);
     const { bark, rings } = this.tiles;
     for (const [type, list] of Object.entries(groups)) {
@@ -543,7 +591,10 @@ export class Renderer3D {
     swing.visible = false;
     g.add(swing);
 
-    g.userData = { skin: p.skin, body, head, rig, legL, legR, swing, swingLife: 0, walk: 0 };
+    const armor = new THREE.Group();
+    armor.add(box(.7, .62, .44, 0xd9e0e7, 1.02), box(.6, .15, .6, 0xd9e0e7, 1.94));
+    armor.visible = false; g.add(armor);
+    g.userData = { armor, skin: p.skin, body, head, rig, legL, legR, swing, swingLife: 0, walk: 0 };
     this.scene.add(g);
     this.meshes.set(p.id, g);
     return g;
@@ -634,6 +685,9 @@ export class Renderer3D {
       g.rotation.y += diff * Math.min(1, dt * 14);
 
       const ud = g.userData;
+      ud.armor.visible = !!p.armor?.durability;
+      for (const part of ud.armor.children) part.material.color.setHex(p.armor?.kind === 'elite' ? 0xe2c87b : 0xd9e0e7);
+      this.applyArmArmor(ud.rig, p.armor);
       ud.bowKick = Math.max(0, (ud.bowKick || 0) - dt);
       ud.walk += (p.moving || 0) * dt * 11;
       const sw = Math.sin(ud.walk) * 0.48 * Math.min(1, p.moving || 0);
@@ -753,6 +807,7 @@ export class Renderer3D {
     if (this.viewModel.visible) {
       const swing = Math.sin(Math.PI * this.swingSelf / .24);
       this.applyArmSkin(this.viewRig, me.skin || 'steve');
+      this.applyArmArmor(this.viewRig, me.armor);
       this.poseArms(this.viewRig, me.weapon, me.draw ?? null, swing, 0, this.bowKick, me.carriesCrystal);
     }
   }
@@ -770,6 +825,7 @@ export class Renderer3D {
       this.objectives.delete(id);
     }
     for (const obj of objects) {
+      if (obj.kind === 'enemy' && this.cityBarriers?.has(obj.city)) this.cityBarriers.get(obj.city).visible = obj.locked;
       let mesh = this.objectives.get(obj.id);
       if (!mesh) {
         const crystal = obj.kind === 'crystal';
@@ -784,8 +840,10 @@ export class Renderer3D {
           } else if (obj.kind === 'enemy') {
             const boss = obj.boss;
             const body = new THREE.Group();
-            const robe = boss ? 0x9b7136 : 0x90734a;
-            body.add(box(.62, .72, .4, robe, 1.13), box(.52, .52, .5, 0xdba77b, 1.77),
+            const robe = obj.color || (boss ? 0x9b7136 : 0x90734a);
+            const head = box(.52, .52, .5, 0xdba77b, 1.77);
+            if (boss && this.skins[obj.skin]) head.material = this.skins[obj.skin].head.map(map => new THREE.MeshLambertMaterial({ map }));
+            body.add(box(.62, .72, .4, robe, 1.13), head,
               box(.57, .14, .55, 0xf5cc35, 1.97), box(.65, .12, .43, 0x4a3425, .88));
             for (const x of [-.13, .13]) {
               const eye = box(.07, .07, .02, 0x251b16, 1.82);
@@ -838,15 +896,73 @@ export class Renderer3D {
             mesh.add(label);
           }
 
+        } else if (obj.kind === 'animal') {
+          const tiger = obj.animal === 'tiger', dog = obj.animal === 'dog';
+          const color = tiger ? 0xd89532 : dog ? 0x9b6745 : 0x8c949d;
+          const body = new THREE.Group();
+          body.add(box(.55, .46, 1, color, .68));
+          const head = box(.46, .42, .48, color, 1.02); head.position.z = .62; body.add(head);
+          for (const side of [-1, 1]) {
+            const ear = box(.14, .22, .14, color, 1.3); ear.position.set(side * .17, 1.3, .59); body.add(ear);
+            const eye = box(.07, .07, .02, 0x171d23, 1.08); eye.position.set(side * .14, 1.08, .87); body.add(eye);
+          }
+          const muzzle = box(.28, .17, .2, tiger ? 0xf0d6b0 : 0xc6beb0, .93); muzzle.position.z = .92; body.add(muzzle);
+          const nose = box(.11, .08, .03, 0x29272a, .97); nose.position.z = 1.03; body.add(nose);
+          const legs = [];
+          for (const x of [-.2, .2]) for (const z of [-.34, .34]) {
+            const pivot = new THREE.Group(); pivot.position.set(x, .55, z);
+            pivot.add(box(.16, .5, .18, color, -.25)); body.add(pivot); legs.push(pivot);
+          }
+          const tail = box(.12, .14, .6, color, .88); tail.position.z = -.72; tail.rotation.x = dog ? -.7 : .35; body.add(tail);
+          if (tiger) for (const side of [-1, 1]) for (const z of [-.3, 0, .3]) {
+            const stripe = box(.035, .44, .11, 0x3a2d25, .7); stripe.position.set(side * .285, .7, z); body.add(stripe);
+          }
+          body.scale.setScalar(tiger ? 1.25 : dog ? .75 : .95);
+          mesh.add(body); mesh.userData.animal = { body, legs };
+        } else if (obj.kind === 'armor_pickup') {
+          const color = obj.armor_kind === 'elite' ? 0xe2c87b : 0xd9e0e7;
+          const model = new THREE.Group();
+          model.add(box(.65, .65, .35, color, .9));
+          for (const side of [-1, 1]) {
+            const shoulder = box(.28, .23, .4, color, 1.2); shoulder.position.x = side * .4; model.add(shoulder);
+          }
+          mesh.add(model);
+          const name = this.world.armor_types[obj.armor_kind].name;
+          const label = labelSprite(name + ' · 耐久 ' + obj.durability + ' · E', '#ffffff', 640, 100, 38);
+          label.position.y = 1.8; label.scale.set(3.2, .6, 1); label.material.depthTest = true; mesh.add(label);
+        } else if (obj.kind === 'story_npc') {
+          const skin = this.skins[obj.skin] || this.skins.steve;
+          const head = box(.54, .54, .54, 0xffffff, 1.7);
+          head.material = skin.head.map(map => new THREE.MeshLambertMaterial({ map }));
+          const torso = box(.64, .8, .4, 0xffffff, 1.04);
+          torso.material = new THREE.MeshLambertMaterial({ map: skin.top });
+          mesh.add(head, torso, box(.56, .66, .35, 0x4b4951, .33));
+          for (const side of [-1, 1]) {
+            const arm = box(.23, .68, .24, 0xffffff, 1.05);
+            arm.material = new THREE.MeshLambertMaterial({ map: skin.sleeve });
+            arm.position.x = side * .45; mesh.add(arm);
+          }
+          const label = labelSprite(obj.name + ' · 对话 E', '#91e9d4', 448, 100, 38);
+          label.position.y = 2.5; label.scale.set(3.1, .7, 1); label.material.depthTest = true; mesh.add(label);
+        } else if (obj.kind === 'chapter_gate') {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(.9, .13, 8, 32),
+            new THREE.MeshBasicMaterial({ color: 0x65e8ef }));
+          ring.position.y = 1.15;
+          mesh.add(ring, box(2.3, .16, .9, 0x39435e, .08));
+          const label = labelSprite(obj.text + ' · E', '#a3ffff', 640, 100, 36);
+          label.position.y = 2.6; label.scale.set(4.2, .7, 1); label.material.depthTest = true; mesh.add(label);
+          const status = labelSprite('清城后开启', '#bdb6cb', 320, 90, 36);
+          status.position.y = 3.2; status.scale.set(2.4, .6, 1); status.material.depthTest = true;
+          mesh.add(status); mesh.userData.gateStatus = status;
         } else if (obj.kind === 'weapon_pickup') {
           const model = makeWeapon(obj.weapon);
           model.position.y = .9;
           model.scale.setScalar(1.45);
           if (obj.weapon !== 'beam') model.rotation.z = -.18;
           mesh.add(model);
-          const label = labelSprite(obj.text + ' · E', '#ffe78b', 320, 100, 40);
+          const label = labelSprite(obj.text + (obj.uses ? ' · ' + obj.uses + '次' : '') + ' · E', obj.rarity === 'boss' ? '#e6b0ff' : '#ffe78b', 640, 100, 38);
           label.position.y = 2.25;
-          label.scale.set(2.4, .75, 1);
+          label.scale.set(obj.rarity ? 3.5 : 2.4, .75, 1);
           label.material.depthTest = true;
           mesh.add(label);
         } else if (obj.kind === 'syllable' || obj.kind === 'forge') {
@@ -877,6 +993,16 @@ export class Renderer3D {
       }
       mesh.visible = obj.kind === 'ore' || obj.hp > 0;
       mesh.position.set(obj.x, obj.y || 0, obj.z);
+      if (obj.kind === 'chapter_gate') {
+        mesh.children[0].rotation.z = this.time * .6;
+        mesh.children[0].material.color.setHex(obj.locked ? 0x666677 : 0x65e8ef);
+        mesh.userData.gateStatus.visible = obj.locked;
+      }
+      if (mesh.userData.animal) {
+        const { body, legs } = mesh.userData.animal;
+        body.rotation.y = obj.yaw || 0;
+        legs.forEach((leg, i) => leg.rotation.x = Math.sin(this.time * 5 + (i % 2) * Math.PI) * .3);
+      }
       if (mesh.userData.enemy) {
         const { body, legs, arms } = mesh.userData.enemy;
         body.rotation.y = obj.yaw || 0;
@@ -886,7 +1012,7 @@ export class Renderer3D {
         body.position.y = obj.hurt ? .09 : 0;
         mesh.userData.lastX = obj.x; mesh.userData.lastZ = obj.z;
       }
-      if (obj.kind === 'weapon_pickup') mesh.children[0].rotation.y = this.time * .55;
+      if (obj.kind === 'weapon_pickup' || obj.kind === 'armor_pickup') mesh.children[0].rotation.y = this.time * .55;
       if (obj.kind === 'ore') {
         mesh.children[0].visible = obj.hp > 0;
         const text = obj.hp ? '' : obj.cooldown > 0 ? obj.cooldown + ' 秒刷新' : '水晶已搬走';

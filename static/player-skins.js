@@ -1,3 +1,4 @@
+import { CAMPAIGN_SKINS } from './campaign-skins.js?v=49';
 import * as THREE from './vendor/three.module.js';
 
 const steveFace = [
@@ -15,10 +16,12 @@ export const SKIN_NAMES = {
   'zhang-fei': '张飞',
   'guan-yu': '关羽',
   'lu-bu': '吕布',
+  ...Object.fromEntries(Object.entries(CAMPAIGN_SKINS).map(([id, cfg]) => [id, cfg.name])),
   miner: '矿工', ranger: '游侠', robot: '机器人',
 };
 
 const EXTRA_SKINS = {
+  ...CAMPAIGN_SKINS,
   red: { solid: '#e64448' },
   blue: { solid: '#3d72e7' },
   'liu-bei': {

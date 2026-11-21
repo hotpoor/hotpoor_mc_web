@@ -67,7 +67,7 @@ export class Renderer2D {
   }
 
   syncObjectives(objects) {
-    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup', 'enemy', 'time_stone'].includes(obj.kind));
+    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup', 'enemy', 'time_stone', 'story_npc', 'chapter_gate', 'armor_pickup', 'animal'].includes(obj.kind));
   }
 
   project(x, y, z) {
@@ -136,7 +136,7 @@ export class Renderer2D {
           ctx.font = '600 11px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = ore.kind === 'forge' ? '#d5adff' : '#ffdd75';
-          ctx.fillText((ore.name ? ore.name + ' ' + ore.hp + '/' + ore.max_hp : ore.text) || (ore.kind === 'dummy' ? '假人 ' + ore.hp + '/' + ore.max_hp : '拼音法阵'), p.x, p.y);
+          ctx.fillText((ore.armor_kind ? '盔甲 ' + ore.durability + ' · E' : ore.name ? ore.name + ' ' + ore.hp + '/' + ore.max_hp : ore.text) || (ore.kind === 'dummy' ? '假人 ' + ore.hp + '/' + ore.max_hp : '拼音法阵'), p.x, p.y);
         }
         continue;
       }
