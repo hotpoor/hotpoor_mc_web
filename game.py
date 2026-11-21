@@ -211,6 +211,24 @@ class Game:
                     self.objects.append({"id": f"dummy-{x}-{z}-{i}", "kind": "dummy",
                                          "x": x + dx * inward_x, "z": z + dz * inward_z,
                                          "hp": MAX_HP * 2, "max_hp": MAX_HP * 2, "ready": 0})
+        for city in self.world["cities"]:
+            cid, cx, cz = city["id"], city["x"], city["z"]
+            self.objects.append({"id": "time-" + cid, "kind": "time_stone", "city": cid,
+                                 "name": "时光机石头 · 击碎复活全城敌人", "x": cx + 15, "z": cz + 15,
+                                 "hp": 100, "max_hp": 100, "ready": 0})
+            for i, (dx, dz) in enumerate(((-4, 13), (4, 13), (0, 10), (-5, -13), (5, -13),
+                                         (-13, -4), (-13, 4), (13, -4), (13, 4))):
+                self.objects.append({"id": f"enemy-{cid}-{i}", "kind": "enemy", "city": cid,
+                                     "name": "黄巾贼" if cid == "yellow" else "守城贼兵",
+                                     "x": cx + dx, "z": cz + dz, "home_x": cx + dx, "home_z": cz + dz,
+                                     "hp": 80, "max_hp": 80, "ready": 0, "yaw": 0, "last_attack": 0})
+            if cid == "yellow":
+                for i, name in enumerate(("张角 · 天公将军", "张宝 · 地公将军", "张梁 · 人公将军")):
+                    dx, dz = ((0, -4), (-4, 1), (4, 1))[i]
+                    self.objects.append({"id": f"boss-{cid}-{i}", "kind": "enemy", "city": cid,
+                                         "name": name, "boss": True, "x": cx + dx, "z": cz + dz,
+                                         "home_x": cx + dx, "home_z": cz + dz,
+                                         "hp": 500, "max_hp": 500, "ready": 0, "yaw": 0, "last_attack": 0})
         self.world["materials"] = MATERIALS
         self.world["weapon_uses"] = WEAPON_USES
         self.world["recipes"] = {
@@ -494,7 +512,7 @@ class Game:
     def hammer_slam(self, p, now):
         self.emit({"k": "slam", "x": p.x, "y": p.jump, "z": p.z})
         for obj in self.targets(p):
-            if (obj["kind"] == "dummy" and p.jump <= 1.2
+            if (obj["kind"] in ("dummy", "enemy", "time_stone") and p.jump <= 1.2
                     and math.hypot(obj["x"] - p.x, obj["z"] - p.z) <= 3.6
                     and not self.blocked(p.x, p.z, obj["x"], obj["z"])):
                 self.damage_object(p, obj, 55, now)
@@ -631,16 +649,36 @@ class Game:
                              "hp": 1, "max_hp": 1, "ready": 0, "source": source, "expires": now + 60})
 
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy") and obj.get("team") != player.team]
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone") and obj.get("team") != player.team]
 
     @staticmethod
     def object_bounds(obj):
         x, z = obj["x"], obj["z"]
-        return ((x - .48, x + .48), (0, 2 if obj["kind"] in ("crystal", "dummy") else 1.7), (z - .48, z + .48))
+        return ((x - .48, x + .48), (0, 2 if obj["kind"] in ("crystal", "dummy", "enemy") else 1.7), (z - .48, z + .48))
 
     def damage_object(self, player, obj, amount, now):
+        if obj["hp"] <= 0:
+            return
         obj["hp"] = max(0, obj["hp"] - amount)
+        obj["hurt_until"] = now + .18
         if obj["hp"]:
+            return
+        if obj["kind"] == "enemy":
+            obj["ready"] = None  # Only this city's time stone can revive enemies.
+            reward = 100 if obj.get("boss") else 15
+            player.score += reward
+            player.session_score += reward
+            self.team_score[player.team] += reward
+            self.db.upsert_player(player)
+            self.emit({"k": "enemy_down", "x": obj["x"], "z": obj["z"], "name": obj["name"]})
+            return
+        if obj["kind"] == "time_stone":
+            obj["ready"] = now + 10
+            for enemy in self.objects:
+                if enemy["kind"] == "enemy" and enemy["city"] == obj["city"]:
+                    enemy.update(hp=enemy["max_hp"], x=enemy["home_x"], z=enemy["home_z"],
+                                 ready=0, last_attack=now + 1, hurt_until=0)
+            self.emit({"k": "city_reset", "x": obj["x"], "z": obj["z"], "city": obj["city"]})
             return
         obj["ready"] = now + {"crystal": 30, "bomb": 20, "dummy": 5}[obj["kind"]]
         self.emit({"k": obj["kind"], "x": obj["x"], "z": obj["z"], "team": obj.get("team")})
@@ -827,6 +865,14 @@ class Game:
         victim.respawn_at = now + RESPAWN_DELAY
         victim.mx = victim.mz = 0.0
 
+        if killer.team == "npc":
+            self.db.upsert_player(victim)
+            self.db.add_history("death", victim.name, killer.name, victim.team,
+                                killer.name + " 击败了 " + victim.name, 0)
+            self.emit({"k": "kill", "killer": killer.name, "victim": victim.name,
+                       "team": victim.team, "id": killer.id, "victim_id": victim.id})
+            return
+
         killer.kills += 1
         killer.session_kills += 1
         killer.score += KILL_SCORE
@@ -889,6 +935,44 @@ class Game:
                         player.x, player.z = x, z
 
     # ---------------------------------------------------------------- tick
+    def advance_enemies(self, dt, now):
+        cities = {city["id"]: city for city in self.world["cities"]}
+        for enemy in self.objects:
+            if enemy["kind"] != "enemy" or enemy["hp"] <= 0:
+                continue
+            city = cities[enemy["city"]]
+            candidates = [p for p in self.players.values() if p.alive
+                          and abs(p.x - city["x"]) < 17 and abs(p.z - city["z"]) < 17
+                          and (not enemy.get("boss") or
+                               (abs(p.x - city["x"]) < 7 and abs(p.z - city["z"]) < 7))]
+            target = min(candidates, key=lambda p: math.hypot(p.x - enemy["x"], p.z - enemy["z"]), default=None)
+            distance = math.hypot(target.x - enemy["x"], target.z - enemy["z"]) if target else math.inf
+            chasing = distance < (11 if enemy.get("boss") else 9)
+            if chasing:
+                tx, tz = target.x, target.z
+            else:
+                # Small patrol around each guard post; return after the player leaves the city.
+                phase = now * .35 + enemy["home_x"] + enemy["home_z"]
+                tx = enemy["home_x"] + math.sin(phase) * 1.4
+                tz = enemy["home_z"] + math.cos(phase) * 1.4
+            dx, dz = tx - enemy["x"], tz - enemy["z"]
+            length = math.hypot(dx, dz)
+            if length > (1.45 if chasing else .15):
+                enemy["yaw"] = math.atan2(dx, dz)
+                step = min(length, (2.2 if chasing else .8) * dt)
+                nx, nz = enemy["x"] + dx / length * step, enemy["z"] + dz / length * step
+                if not collides(nx, enemy["z"], self.blocks):
+                    enemy["x"] = nx
+                if not collides(enemy["x"], nz, self.blocks):
+                    enemy["z"] = nz
+            if (chasing and distance <= 1.9 and target.jump < 1.4 and now >= target.invuln_until
+                    and now - enemy["last_attack"] >= (1.4 if enemy.get("boss") else 1.1)
+                    and not self.blocked(enemy["x"], enemy["z"], target.x, target.z)):
+                enemy["last_attack"] = now
+                attacker = Player(enemy["id"], enemy["name"], "npc", None,
+                                  enemy["x"], enemy["z"], yaw=enemy["yaw"])
+                self.damage(attacker, target, 20 if enemy.get("boss") else 8, now)
+
     def tick(self):
         now = time.monotonic()
         dt = min(0.10, max(0.0, now - self.last_tick))
@@ -945,6 +1029,7 @@ class Game:
 
         self.push_players(previous)
         self.advance_arrows(dt, now)
+        self.advance_enemies(dt, now)
         for p in self.players.values():
             if not p.recall_until:
                 continue
@@ -998,7 +1083,7 @@ class Game:
                        for arrow_id, arrow in self.arrows.items()],
             "team_score": self.team_score,
             "craft_modes": self.craft_modes,
-            "objects": [{**obj, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
+            "objects": [{**obj, "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }
 

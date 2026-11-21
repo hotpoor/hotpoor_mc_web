@@ -246,6 +246,15 @@ function applyState(s) {
     }
   }
   const objects = s.objects || [];
+  G.objects = objects;
+  const city = G.world.cities?.find(city => G.me && Math.abs(G.me.x - city.x) < 20 && Math.abs(G.me.z - city.z) < 20);
+  if (city) {
+    const enemies = objects.filter(obj => obj.kind === 'enemy' && obj.city === city.id);
+    const alive = enemies.filter(obj => obj.hp > 0);
+    $('campaign-status').textContent = city.name + ' · 敌人 ' + alive.length + '/' + enemies.length
+      + (city.id === 'yellow' ? ' · 首领 ' + alive.filter(obj => obj.boss).length + '/3' : '')
+      + (alive.length ? '' : ' · 已肃清') + ' · 东南角石头可复活全城';
+  } else $('campaign-status').textContent = '第一城：往北前往黄巾起义城';
   G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))));
   for (const team of ['red', 'blue']) {
     const crystal = objects.find(obj => obj.id === team);
@@ -278,6 +287,17 @@ function handleEvent(ev) {
     case 'crystal':
       log(G.world.teams[ev.team].name + '水晶被打碎，基地与泉水回血暂停 30 秒', 'join');
       break;
+    case 'enemy_down':
+      log('击败 ' + ev.name, 'kill');
+      G.renderer?.spawnSlam?.({ x: ev.x, y: 0, z: ev.z });
+      break;
+    case 'city_reset': {
+      const city = G.world.cities?.find(city => city.id === ev.city);
+      banner((city?.name || '城市') + ' · 时光倒流，全城敌人复活！');
+      log((city?.name || '城市') + '的时光机石头被击碎，敌人已全部复活', 'join');
+      G.renderer?.spawnSlam?.({ x: ev.x, y: 0, z: ev.z });
+      break;
+    }
     case 'bomb':
       G.renderer?.spawnWave?.({ start: [ev.x, .65, ev.z], end: [ev.x, .65, ev.z], blast: true });
       break;
@@ -823,12 +843,12 @@ function updateDeath() {
 
 function drawMinimap() {
   const cv = $('minimap'), ctx = cv.getContext('2d');
-  const size = cv.width, k = size / 64;
-  const tx = x => (x + 32) * k, tz = z => (z + 32) * k;
+  const size = cv.width, k = size / G.world.size;
+  const tx = x => (x + G.world.half) * k, tz = z => (z + G.world.half) * k;
   ctx.clearRect(0, 0, size, size);
   ctx.fillStyle = '#4e8240'; ctx.fillRect(0, 0, size, size);
   ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
-  for (let i = 8; i < 64; i += 8) {
+  for (let i = 8; i < G.world.size; i += 8) {
     ctx.beginPath(); ctx.moveTo(i * k, 0); ctx.lineTo(i * k, size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, i * k); ctx.lineTo(size, i * k); ctx.stroke();
   }
@@ -846,6 +866,17 @@ function drawMinimap() {
   }
   ctx.fillStyle = 'rgba(30,36,30,.55)';
   for (const b of G.world.blocks) ctx.fillRect(tx(b.x) - 1, tz(b.z) - 1, 2.5, 2.5);
+  for (const city of G.world.cities || []) {
+    ctx.strokeStyle = '#f4d46a'; ctx.lineWidth = 1;
+    ctx.strokeRect(tx(city.x - 18), tz(city.z - 18), 36 * k, 36 * k);
+    ctx.fillStyle = '#fff0b5'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(city.chapter + ' ' + city.name, tx(city.x), tz(city.z - 20));
+  }
+  for (const enemy of G.objects || []) {
+    if (enemy.kind !== 'enemy' || !enemy.hp) continue;
+    ctx.fillStyle = enemy.boss ? '#ff753c' : '#f3d147';
+    ctx.fillRect(tx(enemy.x) - 1, tz(enemy.z) - 1, enemy.boss ? 4 : 2, enemy.boss ? 4 : 2);
+  }
   for (const p of G.players.values()) {
     if (!p.alive) continue;
     const x = tx(p.rx), z = tz(p.rz);

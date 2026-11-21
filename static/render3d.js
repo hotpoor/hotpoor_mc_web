@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=47';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=48';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=41';
 
@@ -97,6 +97,7 @@ export class Renderer3D {
     for (const key of Object.keys(world.teams)) this.buildBase(world.teams[key]);
     for (const pool of world.pools) this.buildPool(pool);
     this.buildBlocks(world.blocks);
+    this.buildCities();
     this.resize();
   }
 
@@ -236,9 +237,8 @@ export class Renderer3D {
 
     const size = Math.round(this.world.size);
     const ground = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 0.8, 1),
-      [this.tiles.grassSide, this.tiles.grassSide, this.tiles.grass,
-        this.tiles.dirt, this.tiles.grassSide, this.tiles.grassSide],
+      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+      this.tiles.grass,
       size * size,
     );
     const dummy = new THREE.Object3D();
@@ -249,7 +249,7 @@ export class Renderer3D {
       for (let gz = 0; gz < size; gz++) {
         const x = gx - size / 2 + 0.5;
         const z = gz - size / 2 + 0.5;
-        dummy.position.set(x, -0.4, z);
+        dummy.position.set(x, 0, z);
         dummy.updateMatrix();
         ground.setMatrixAt(i, dummy.matrix);
         const n = ((gx * 73 + gz * 151) % 17) / 17;
@@ -291,6 +291,47 @@ export class Renderer3D {
       cap.position.set(x, 2.3, z);
       this.scene.add(cap);
     }
+  }
+
+  buildCities() {
+    for (const city of this.world.cities || []) {
+      const g = new THREE.Group();
+      g.position.set(city.x, 0, city.z);
+      // Roads extend from the old battlefield through the four city gates.
+      const road = box(city.x ? 49 : 5, .06, city.z ? 49 : 5, 0xb49d77, .015);
+      road.position.set(city.x / 2, .015, city.z / 2);
+      this.scene.add(road);
+      for (const [w, d] of [[34, 5], [5, 34]]) g.add(box(w, .08, d, 0xc2aa80, .04));
+      for (const x of [-18, 18]) for (const z of [-18, 18]) {
+        const tower = box(3, 6, 3, 0x66666a, 3);
+        tower.position.set(x, 3, z);
+        const roof = box(4, .6, 4, 0x443e40, 6.25);
+        roof.position.set(x, 6.25, z);
+        g.add(tower, roof);
+      }
+      for (const z of [-18, 18]) {
+        const lintel = box(7, .75, 1.3, 0x6e4a31, 4.5);
+        lintel.position.z = z;
+        g.add(lintel);
+        const name = labelSprite(city.chapter + ' · ' + city.name, '#ffeaa0', 640, 120, 46);
+        name.scale.set(8, 1.5, 1);
+        name.position.set(0, 5.6, z);
+        name.material.depthTest = true;
+        g.add(name);
+      }
+      if (city.id === 'yellow') {
+        const inner = labelSprite('内城 · 张角 / 张宝 / 张梁', '#ffcf66', 640, 100, 40);
+        inner.position.set(0, 4.2, 8);
+        inner.scale.set(7, 1.1, 1);
+        inner.material.depthTest = true;
+        g.add(inner);
+      }
+      this.scene.add(g);
+    }
+    const sign = labelSprite('↑ 第一城 · 黄巾起义城（北）', '#ffe8a0', 640, 110, 42);
+    sign.position.set(0, 3.2, -29);
+    sign.scale.set(7, 1.2, 1);
+    this.scene.add(sign);
   }
 
   buildBase(team) {
@@ -733,13 +774,45 @@ export class Renderer3D {
       if (!mesh) {
         const crystal = obj.kind === 'crystal';
         mesh = new THREE.Group();
-        if (crystal || obj.kind === 'dummy') {
+        if (crystal || ['dummy', 'enemy', 'time_stone'].includes(obj.kind)) {
           if (crystal) {
             const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.67),
               new THREE.MeshLambertMaterial({ color: TEAM_HEX[obj.team], emissive: TEAM_HEX[obj.team], emissiveIntensity: .35 }));
             gem.position.y = 1.1;
             gem.scale.y = 1.35;
             mesh.add(gem, box(1.1, .24, 1.1, 0x3b3849, .12));
+          } else if (obj.kind === 'enemy') {
+            const boss = obj.boss;
+            const body = new THREE.Group();
+            const robe = boss ? 0x9b7136 : 0x90734a;
+            body.add(box(.62, .72, .4, robe, 1.13), box(.52, .52, .5, 0xdba77b, 1.77),
+              box(.57, .14, .55, 0xf5cc35, 1.97), box(.65, .12, .43, 0x4a3425, .88));
+            for (const x of [-.13, .13]) {
+              const eye = box(.07, .07, .02, 0x251b16, 1.82);
+              eye.position.set(x, 1.82, .26); body.add(eye);
+            }
+            const legs = [], arms = [];
+            for (const side of [-1, 1]) {
+              const leg = new THREE.Group(); leg.position.set(side * .18, .8, 0);
+              leg.add(box(.25, .7, .3, 0x40362c, -.35)); body.add(leg); legs.push(leg);
+              const arm = new THREE.Group(); arm.position.set(side * .44, 1.45, 0);
+              arm.add(box(.23, .65, .25, robe, -.25)); body.add(arm); arms.push(arm);
+            }
+            const blade = box(.1, .85, .12, 0xc9d0cc, -.22);
+            blade.position.z = .3; arms[1].add(blade);
+            if (boss) {
+              body.add(box(.22, .32, .19, 0x382923, 1.41));
+              body.scale.setScalar(1.2);
+            }
+            mesh.add(body);
+            mesh.userData.enemy = { body, legs, arms };
+          } else if (obj.kind === 'time_stone') {
+            mesh.add(box(1.2, 1.5, .8, 0x46546f, .75));
+            const clock = new THREE.Mesh(new THREE.TorusGeometry(.36, .06, 8, 24),
+              new THREE.MeshBasicMaterial({ color: 0x7ffff1 }));
+            clock.position.set(0, .85, .43);
+            mesh.add(clock);
+            const hand = box(.05, .3, .04, 0x7ffff1, .95); hand.position.z = .44; mesh.add(hand);
           } else {
             mesh.add(box(.54, .52, .49, 0xc6a45f, 1.65),
               box(.63, .68, .37, 0x9e713e, 1.06),
@@ -753,10 +826,17 @@ export class Renderer3D {
           const map = new THREE.CanvasTexture(canvas);
           map.colorSpace = THREE.SRGBColorSpace;
           const bar = new THREE.Sprite(new THREE.SpriteMaterial({ map, depthWrite: false }));
-          bar.position.y = 2.32;
+          bar.position.y = obj.boss ? 3.05 : 2.32;
           bar.scale.set(2.4, .4, 1);
           mesh.add(bar);
           mesh.userData.healthBar = { canvas, map };
+          if (obj.name) {
+            const label = labelSprite(obj.name, obj.boss ? '#ffd06b' : '#fff1a8', 640, 100, 37);
+            label.scale.set(obj.kind === 'time_stone' ? 4.8 : 3, .6, 1);
+            label.position.y = obj.boss ? 3.5 : 2.8;
+            label.material.depthTest = true;
+            mesh.add(label);
+          }
 
         } else if (obj.kind === 'weapon_pickup') {
           const model = makeWeapon(obj.weapon);
@@ -796,6 +876,16 @@ export class Renderer3D {
         this.objectives.set(obj.id, mesh);
       }
       mesh.visible = obj.kind === 'ore' || obj.hp > 0;
+      mesh.position.set(obj.x, obj.y || 0, obj.z);
+      if (mesh.userData.enemy) {
+        const { body, legs, arms } = mesh.userData.enemy;
+        body.rotation.y = obj.yaw || 0;
+        const moving = mesh.userData.lastX !== undefined && Math.hypot(obj.x - mesh.userData.lastX, obj.z - mesh.userData.lastZ) > .001;
+        legs.forEach((leg, i) => leg.rotation.x = moving ? Math.sin(this.time * 8 + i * Math.PI) * .5 : 0);
+        arms[1].rotation.x = obj.attacking ? -1.8 : -.15;
+        body.position.y = obj.hurt ? .09 : 0;
+        mesh.userData.lastX = obj.x; mesh.userData.lastZ = obj.z;
+      }
       if (obj.kind === 'weapon_pickup') mesh.children[0].rotation.y = this.time * .55;
       if (obj.kind === 'ore') {
         mesh.children[0].visible = obj.hp > 0;
@@ -827,7 +917,7 @@ export class Renderer3D {
           const ctx = bar.canvas.getContext('2d');
           ctx.fillStyle = '#171b28';
           ctx.fillRect(0, 0, 192, 32);
-          ctx.fillStyle = obj.kind === 'dummy' ? '#95733e' : this.world.teams[obj.team].color;
+          ctx.fillStyle = ({ dummy: '#95733e', enemy: obj.boss ? '#e18039' : '#ceb33d', time_stone: '#42bbae' })[obj.kind] || this.world.teams[obj.team]?.color || '#ffffff';
           ctx.fillRect(3, 3, 186 * obj.hp / obj.max_hp, 26);
           ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'center';

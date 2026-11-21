@@ -67,7 +67,7 @@ export class Renderer2D {
   }
 
   syncObjectives(objects) {
-    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup'].includes(obj.kind));
+    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup', 'enemy', 'time_stone'].includes(obj.kind));
   }
 
   project(x, y, z) {
@@ -83,12 +83,12 @@ export class Renderer2D {
     const o = this.toScreen(0, 0);
     ctx.strokeStyle = 'rgba(255,255,255,0.055)';
     ctx.lineWidth = 1;
-    for (let i = -32; i <= 32; i += 2) {
+    for (let i = -this.world.half; i <= this.world.half; i += 2) {
       ctx.beginPath(); ctx.moveTo(o.x + i * s, 0); ctx.lineTo(o.x + i * s, h); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, o.y + i * s); ctx.lineTo(w, o.y + i * s); ctx.stroke();
     }
 
-    const a = this.toScreen(-32, -32), b = this.toScreen(32, 32);
+    const a = this.toScreen(-this.world.half, -this.world.half), b = this.toScreen(this.world.half, this.world.half);
     ctx.fillStyle = '#3e6b34';
     ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
     ctx.strokeStyle = '#6b716d'; ctx.lineWidth = 7;
@@ -136,7 +136,7 @@ export class Renderer2D {
           ctx.font = '600 11px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = ore.kind === 'forge' ? '#d5adff' : '#ffdd75';
-          ctx.fillText(ore.text || (ore.kind === 'dummy' ? '假人 ' + ore.hp + '/' + ore.max_hp : '拼音法阵'), p.x, p.y);
+          ctx.fillText((ore.name ? ore.name + ' ' + ore.hp + '/' + ore.max_hp : ore.text) || (ore.kind === 'dummy' ? '假人 ' + ore.hp + '/' + ore.max_hp : '拼音法阵'), p.x, p.y);
         }
         continue;
       }

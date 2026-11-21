@@ -9,8 +9,8 @@ Coordinates: X/Z is the ground plane, Y is up. One unit == one block.
 import math
 import random
 
-HALF = 32.0
-SIZE = 64.0
+HALF = 80.0
+SIZE = 160.0
 SEED = 20261114
 
 TEAMS = {
@@ -44,6 +44,37 @@ HEAL_POOLS = [
     {"x": -13.0, "z": 13.0, "r": 2.8, "power": 14, "name": "林间泉"},
     {"x": 13.0, "z": -13.0, "r": 2.8, "power": 14, "name": "岩间泉"},
 ]
+
+# Campaign cities surround the original multiplayer arena; wide gates face every road.
+CITIES = [
+    {"id": "yellow", "name": "黄巾起义城", "x": 0, "z": -55, "chapter": 1},
+    {"id": "hulao", "name": "虎牢关城", "x": 55, "z": 0, "chapter": 2},
+    {"id": "guandu", "name": "官渡城", "x": 0, "z": 55, "chapter": 3},
+    {"id": "chibi", "name": "赤壁城", "x": -55, "z": 0, "chapter": 4},
+]
+
+
+def city_blocks():
+    blocks = []
+    for city in CITIES:
+        rings = (18, 8) if city["id"] == "yellow" else (18,)
+        for radius in rings:
+            for offset in range(-radius, radius + 1):
+                if abs(offset) <= 3:
+                    continue  # Seven-block gates, including an unobstructed road to the keep.
+                for x, z in ((offset, -radius), (offset, radius), (-radius, offset), (radius, offset)):
+                    block = {"x": city["x"] + x, "z": city["z"] + z,
+                             "h": 4 if radius == 18 else 3, "type": "brick"}
+                    if block not in blocks:
+                        blocks.append(block)
+        # Houses flank the roads, leaving the centre and the gates free.
+        for dx, dz in ((-12, -10), (12, -10), (-12, 10), (12, 10)):
+            for ox in range(-1, 2):
+                for oz in range(-1, 2):
+                    blocks.append({"x": city["x"] + dx + ox, "z": city["z"] + dz + oz,
+                                   "h": 3 if abs(ox) == 1 or abs(oz) == 1 else 4, "type": "stone"})
+    return blocks
+
 
 RULES = {
     "max_hp": 100,
@@ -152,6 +183,7 @@ def build_world():
         "half": HALF,
         "teams": TEAMS,
         "pools": HEAL_POOLS,
-        "blocks": _generate_blocks(),
+        "blocks": _generate_blocks() + city_blocks(),
+        "cities": CITIES,
         "rules": RULES,
     }
