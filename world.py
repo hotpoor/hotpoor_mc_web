@@ -192,6 +192,52 @@ def _generate_blocks():
     return blocks
 
 
+class BlockList(list):
+    """JSON-compatible static blocks with a local collision broad phase."""
+    def __init__(self, values=()):
+        super().__init__(values)
+        self._buckets = None
+
+    def append(self, value):
+        super().append(value); self._buckets = None
+
+    def extend(self, values):
+        super().extend(values); self._buckets = None
+
+    def insert(self, index, value):
+        super().insert(index, value); self._buckets = None
+
+    def remove(self, value):
+        super().remove(value); self._buckets = None
+
+    def pop(self, index=-1):
+        value = super().pop(index); self._buckets = None; return value
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value); self._buckets = None
+
+    def __delitem__(self, key):
+        super().__delitem__(key); self._buckets = None
+
+    def __iadd__(self, values):
+        super().__iadd__(values); self._buckets = None; return self
+
+    def __imul__(self, count):
+        super().__imul__(count); self._buckets = None; return self
+
+    def clear(self):
+        super().clear(); self._buckets = None
+
+    def nearby(self, x, z, radius=1):
+        if self._buckets is None:
+            self._buckets = {}
+            for b in self:
+                self._buckets.setdefault((math.floor(b['x']/4),math.floor(b['z']/4)),[]).append(b)
+        return (b for gx in range(math.floor((x-radius)/4),math.floor((x+radius)/4)+1)
+                for gz in range(math.floor((z-radius)/4),math.floor((z+radius)/4)+1)
+                for b in self._buckets.get((gx,gz),()))
+
+
 def collides(x, z, blocks, radius=0.36, feet=0):
     """Server-side wall collision. Blocks are 1x1 AABBs centred on integer x/z."""
     edge = HALF - 1.0 - radius
@@ -200,7 +246,7 @@ def collides(x, z, blocks, radius=0.36, feet=0):
     if any(m["x0"] - radius < x < m["x1"] + radius and m["z0"] - radius < z < m["z1"] + radius for m in MOATS):
         return True
     limit = 0.5 + radius
-    for b in blocks:
+    for b in (blocks.nearby(x,z,limit) if isinstance(blocks,BlockList) else blocks):
         if feet < b["h"] and abs(x - b["x"]) < limit and abs(z - b["z"]) < limit:
             return True
     return False
@@ -228,7 +274,7 @@ def build_world():
         "half": HALF,
         "teams": TEAMS,
         "pools": HEAL_POOLS,
-        "blocks": _generate_blocks() + city_blocks() + village_blocks(),
+        "blocks": BlockList(_generate_blocks() + city_blocks() + village_blocks()),
         "cities": CITIES,
         "routes": ROUTES, "villages": VILLAGES, "moats": MOATS,
         "rules": RULES,

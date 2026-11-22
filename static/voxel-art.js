@@ -1,4 +1,4 @@
-import { attachWeaponModel } from './weapon-models.js?v=51';
+import { attachWeaponModel } from './weapon-models.js?v=54';
 import * as THREE from './vendor/three.module.js';
 
 export function voxelMaterial(kind) {
@@ -37,7 +37,7 @@ export function voxelMaterial(kind) {
   return new THREE.MeshLambertMaterial({ map });
 }
 
-export function makeWeapon(kind, overlay = false) {
+export function makeWeapon(kind, overlay = false, generated = true) {
   const group = new THREE.Group();
   function part(w, h, d, color, x, y, z = 0) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
@@ -127,7 +127,8 @@ export function makeWeapon(kind, overlay = false) {
     part(.065, .12, .065, 0xb9d2d4, 0, .32);
     part(.12, .12, .03, 0xf4e4c6, 0, -.27);
   }
-  attachWeaponModel(group, kind, overlay);
+  group.userData.loadModel = () => { if(group.userData.modelRequested)return;group.userData.modelRequested=true;attachWeaponModel(group,kind,overlay); };
+  if(generated)group.userData.loadModel();
   return group;
 }
 

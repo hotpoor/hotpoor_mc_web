@@ -318,3 +318,9 @@ body.first-person #view { cursor: crosshair; }
 #damage-flash.hurt-pulse { animation: hurt-pulse .44s ease-out; }
 @keyframes hurt-pulse { 0%, 40% { opacity: .85; } 24%, 75%, 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #damage-flash.hurt-pulse { animation: none; } }
+
+.transfer-modal { position:fixed; inset:0; z-index:30; display:grid; place-items:center; background:#09131ac4; padding:20px; }
+.transfer-card { width:min(440px,95vw); max-height:80vh; overflow:auto; padding:20px; color:#e1f5f3; }
+.transfer-card h3 { margin:0 0 12px; }
+.transfer-card p { font-size:13px; line-height:1.7; }
+.transfer-target { text-align:left; margin:8px 0; padding:12px; }

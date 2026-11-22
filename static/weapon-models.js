@@ -35,7 +35,7 @@ export function attachWeaponModel(group, kind, overlay = false) {
     // Share immutable geometry and maps, clone materials for first-person depth settings.
     model.traverse(mesh => {
       if (!mesh.isMesh) return;
-      mesh.geometry = mesh.geometry.clone();
+      mesh.geometry.userData.sharedWeapon = true;
       const prepare = material => {
         const copy = material.clone();
         copy.userData.sharedTextures = true;

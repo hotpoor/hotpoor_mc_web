@@ -91,6 +91,8 @@ class Player:
     gun_ready: float = 0.0
     recall_until: float = 0.0
     recall_ready: float = 0.0
+    transfer_target: str = ""
+    transfer_ready: float = 0.0
     next_round: float = 0.0
     ammo: int = 30
     last_damage_at: float = 0.0
@@ -437,10 +439,20 @@ class Game:
             if skin in SKIN_NAMES:
                 p.skin = skin
             return
+        if kind == "team_transfer":
+            target = self.players.get(data.get("target")) if isinstance(data.get("target"), str) else None
+            if (target and target.id != p.id and target.alive and target.team == p.team
+                    and p.alive and p.grounded and not p.recall_until and now >= p.transfer_ready):
+                p.mx = p.mz = 0.0
+                p.draw_started = None
+                p.transfer_target = target.id
+                p.recall_until = now + 3
+            return
         if kind == "recall":
             if p.alive and p.grounded and not p.recall_until and now >= p.recall_ready:
                 p.mx = p.mz = 0.0
                 p.draw_started = None
+                p.transfer_target = ""
                 p.recall_until = now + 3
             return
         if p.recall_until and kind in ("attack", "draw", "wave", "jump"):
@@ -624,9 +636,14 @@ class Game:
         return prefix if prefix in ("text", "whole") else "split"
 
     def city_unlocked(self, city_id):
-        cities = self.world["cities"]
-        index = next(i for i, city in enumerate(cities) if city["id"] == city_id)
-        return all(city["id"] in self.cleared_cities for city in cities[:index])
+        if self.cleared_cities != getattr(self, "_unlocked_state", None):
+            self._unlocked_state = self.cleared_cities.copy()
+            self._unlocked = set()
+            for city in self.world["cities"]:
+                self._unlocked.add(city["id"])
+                if city["id"] not in self.cleared_cities:
+                    break
+        return city_id in self._unlocked
 
     def locked_city_at(self, x, z):
         return any(abs(x - c["x"]) < 18 and abs(z - c["z"]) < 18
@@ -900,7 +917,7 @@ class Game:
         reach = 18 if beam else 12
         start, delta = (p.x, y, p.z), (fx * reach, 0, fz * reach)
         stop = 1.0
-        for block in self.blocks:
+        for block in self.blocks.nearby(p.x+delta[0]/2,p.z+delta[2]/2,max(abs(delta[0]),abs(delta[2]))/2+.5):
             x, z = block["x"], block["z"]
             t = segment_box(start, delta, ((x - .5, x + .5), (0, block["h"]), (z - .5, z + .5)))
             if t is not None:
@@ -976,7 +993,7 @@ class Game:
                 elif origin + step > high:
                     hit_at = min(hit_at, (high - origin) / step)
 
-            for block in self.blocks:
+            for block in self.blocks.nearby(x+delta[0]/2,z+delta[2]/2,max(abs(delta[0]),abs(delta[2]))/2+.5):
                 bx, bz = block["x"], block["z"]
                 if abs(bx - x) > abs(delta[0]) + 0.5 or abs(bz - z) > abs(delta[2]) + 0.5:
                     continue
@@ -1017,7 +1034,7 @@ class Game:
         for i in range(1, steps):
             t = i / steps
             x, z = x0 + (x1 - x0) * t, z0 + (z1 - z0) * t
-            for b in self.blocks:
+            for b in self.blocks.nearby(x, z, .5):
                 if abs(x - b["x"]) < 0.5 and abs(z - b["z"]) < 0.5:
                     return True
         return False
@@ -1196,6 +1213,16 @@ class Game:
     def advance_animals(self, dt, now):
         animal_system.advance(self, dt, now)
 
+    def transfer_arrival(self, target):
+        for radius in (1.6, 2.5, 3.5):
+            for step in range(12):
+                angle = step * math.pi / 6
+                x, z = target.x + math.cos(angle)*radius, target.z + math.sin(angle)*radius
+                if (not self.locked_city_at(x,z) and not collides(x,z,self.blocks)
+                        and all(not p.alive or math.hypot(p.x-x,p.z-z)>.85 for p in self.players.values())):
+                    return x,z
+        return None
+
     def tick(self):
         now = time.monotonic()
         dt = min(0.10, max(0.0, now - self.last_tick))
@@ -1235,7 +1262,7 @@ class Game:
             if not self.locked_city_at(p.x, nz) and not collides(p.x, nz, self.blocks, feet=p.jump):
                 p.z = nz
 
-            support = max((b["h"] for b in self.blocks if b["h"] <= p.jump
+            support = max((b["h"] for b in self.blocks.nearby(p.x,p.z,.86) if b["h"] <= p.jump
                            and abs(p.x - b["x"]) < .86 and abs(p.z - b["z"]) < .86), default=0)
             height = p.jump + (p.jump_speed - 8 * dt) * dt
             p.grounded = height <= support
@@ -1264,11 +1291,24 @@ class Game:
         farm_system.advance(self, dt, now)
         for p in self.players.values():
             if not p.recall_until:
+                p.transfer_target = ""
                 continue
             if not p.alive or not p.grounded or (p.x, p.z) != previous.get(p.id):
                 p.recall_until = 0.0
             elif now >= p.recall_until:
                 p.recall_until = 0.0
+                if p.transfer_target:
+                    target = self.players.get(p.transfer_target)
+                    arrival = self.transfer_arrival(target) if target and target.alive and target.team == p.team else None
+                    p.transfer_target = ""
+                    if not arrival:
+                        self.emit({"k":"story","id":p.id,"text":"传送取消：队友已离线、阵亡或附近没有安全位置。"})
+                        continue
+                    p.transfer_ready = now + 30
+                    p.x,p.z = arrival
+                    p.jump=p.jump_speed=0.0
+                    self.emit({"k":"team_transfer","id":p.id,"target":target.name,"x":p.x,"z":p.z})
+                    continue
                 p.recall_ready = now + 30
                 p.x, p.z = TEAMS[p.team]["spawn"]
                 p.jump = p.jump_speed = 0.0
@@ -1296,6 +1336,8 @@ class Game:
                 "rocket_cd": round(max(0, p.rocket_ready - now), 1),
                 "recall": max(0, math.ceil((p.recall_until - now) * 10) / 10),
                 "recall_cd": max(0, math.ceil(p.recall_ready - now)),
+                "transfer_target": p.transfer_target if p.recall_until else "",
+                "transfer_cd": max(0, math.ceil(p.transfer_ready - now)),
                 "gun_cd": max(0, math.ceil((p.gun_ready - now) * 10) / 10),
                 "ammo": p.ammo if now < p.gun_ready or p.ammo else 30,
                 "draw": None if p.draw_started is None else min(1.0, now - p.draw_started),
@@ -1316,7 +1358,7 @@ class Game:
             "team_score": self.team_score,
             "craft_modes": self.craft_modes,
             "campaign_cleared": sorted(self.cleared_cities),
-            "objects": [{**{key: value for key, value in obj.items() if not key.startswith("_")}, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "grow_cd": max(0, math.ceil(obj.get("grow_until", 0) - now)) if obj.get("stage") == 2 else 0, "working": now < obj.get("working_until", 0), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
+            "objects": [{**{key: value for key, value in obj.items() if not key.startswith("_") and key not in {"home_x","home_z","last_attack","last_fed","next_poop","grow_until","working_until","hurt_until","angry_until","feeding_until","stuck","prey","ready","expires"}}, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "grow_cd": max(0, math.ceil(obj.get("grow_until", 0) - now)) if obj.get("stage") == 2 else 0, "working": now < obj.get("working_until", 0), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }
 

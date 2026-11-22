@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=52';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=54';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -68,7 +68,10 @@ export class Renderer3D {
     this.bowKick = 0;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.info.autoReset=false;
+    this.maxDpr=Math.min(window.devicePixelRatio||1,1.5);
+    this.renderer.setPixelRatio(this.maxDpr);
+    this.qualityWindow={time:performance.now(),frames:0};
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xb7dcf2);
@@ -102,6 +105,8 @@ export class Renderer3D {
     this.buildCities();
     this.buildRoadside();
     this.resize();
+    const owner=this;
+    window.__THREE_GAME_DIAGNOSTICS__={get render(){return {...owner.renderer.info.render}},get memory(){return {...owner.renderer.info.memory}},get dpr(){return owner.renderer.getPixelRatio()},get objectiveMeshes(){return owner.objectives.size}};
   }
 
   buildViewModel() {
@@ -140,7 +145,7 @@ export class Renderer3D {
     const left = createArm(.43);
     const weapons = {};
     for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'beam']) {
-      const weapon = makeWeapon(kind, overlay);
+      const weapon = makeWeapon(kind, overlay, false);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
       right.pivot.add(weapon);
@@ -158,7 +163,7 @@ export class Renderer3D {
     crystal.renderOrder = overlay ? 999 : 0;
     crystal.visible = false;
     left.pivot.add(crystal);
-    const secondSword = makeWeapon('dual', overlay);
+    const secondSword = makeWeapon('dual', overlay, false);
     secondSword.position.set(0, -.58, .12);
     secondSword.visible = false;
     left.pivot.add(secondSword);
@@ -189,6 +194,8 @@ export class Renderer3D {
   }
 
   poseArms(rig, weapon, draw, swing, walk, recoil, carriesCrystal = false) {
+    rig.weapons[weapon]?.userData.loadModel?.();
+    if(weapon==='dual')rig.secondSword.userData.loadModel?.();
     const right = rig.right.pivot;
     const left = rig.left.pivot;
     const bow = weapon === 'bow';
@@ -247,43 +254,12 @@ export class Renderer3D {
     outer.position.y = -1.15;
     this.scene.add(outer);
 
-    const size = Math.round(this.world.size);
-    const ground = new THREE.InstancedMesh(
-      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-      this.tiles.grass,
-      size * size,
-    );
-    const dummy = new THREE.Object3D();
-    const color = new THREE.Color();
-    const teams = Object.values(this.world.teams);
-    let i = 0;
-    for (let gx = 0; gx < size; gx++) {
-      for (let gz = 0; gz < size; gz++) {
-        const x = gx - size / 2 + 0.5;
-        const z = gz - size / 2 + 0.5;
-        dummy.position.set(x, 0, z);
-        dummy.updateMatrix();
-        ground.setMatrixAt(i, dummy.matrix);
-        const n = ((gx * 73 + gz * 151) % 17) / 17;
-        color.setScalar(0.79 + n * 0.21);
-        for (const t of teams) {
-          const [x0, x1, z0, z1] = t.zone;
-          if (x >= x0 && x <= x1 && z >= z0 && z <= z1) {
-            color.lerp(new THREE.Color(t.color), 0.32);
-          }
-        }
-        for (const p of this.world.pools) {
-          if (Math.hypot(x - p.x, z - p.z) <= p.r + 0.8) {
-            color.lerp(new THREE.Color(0x5fd6c0), 0.45);
-          }
-        }
-        ground.setColorAt(i, color);
-        i++;
-      }
-    }
-    ground.instanceMatrix.needsUpdate = true;
-    if (ground.instanceColor) ground.instanceColor.needsUpdate = true;
-    this.scene.add(ground);
+    const size = this.world.size;
+    const geometry = new THREE.PlaneGeometry(size,size).rotateX(-Math.PI/2);
+    const uv=geometry.attributes.uv;
+    for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*size,uv.getY(i)*size);
+    const material=this.tiles.grass.clone();material.color.setScalar(.89);
+    this.scene.add(new THREE.Mesh(geometry,material));
   }
 
   buildWalls() {
@@ -709,7 +685,7 @@ export class Renderer3D {
       if (p.invuln && !selfHidden) g.visible = Math.floor(this.time * 9) % 2 === 0;
     }
     for (const [id, g] of this.meshes) {
-      if (!seen.has(id)) { this.scene.remove(g); this.meshes.delete(id); }
+      if (!seen.has(id)) { this.scene.remove(g);const materials=new Set();g.traverse(part=>{if(!part.geometry?.userData.sharedWeapon)part.geometry?.dispose();for(const m of (Array.isArray(part.material)?part.material:[part.material]))if(m)materials.add(m)});for(const m of materials)m.dispose();this.meshes.delete(id); }
     }
 
     for (const b of this.beacons) b.rotation.z = this.time * 0.8;
@@ -827,19 +803,26 @@ export class Renderer3D {
     }
   }
 
+  disposeObjective(id, mesh) {
+    this.scene.remove(mesh);
+    const materials=new Set(),textures=new Set();
+    mesh.traverse(part=>{if(!part.isSprite&&!part.geometry?.userData.sharedWeapon)part.geometry?.dispose();
+      for(const mat of (Array.isArray(part.material)?part.material:[part.material]))if(mat){materials.add(mat);if(part.isSprite&&mat.map)textures.add(mat.map);}});
+    for(const texture of textures)texture.dispose();
+    for(const material of materials)material.dispose();
+    this.objectives.delete(id);
+  }
+
   syncObjectives(objects, viewerName = '') {
     const active = new Set(objects.map(obj => obj.id));
     for (const [id, mesh] of this.objectives) {
       if (active.has(id)) continue;
-      this.scene.remove(mesh);
-      mesh.traverse(child => {
-        child.geometry?.dispose();
-        if (!child.material?.userData.sharedTextures) child.material?.map?.dispose();
-        child.material?.dispose();
-      });
-      this.objectives.delete(id);
+      this.disposeObjective(id, mesh);
     }
     for (const obj of objects) {
+      const distance=Math.hypot(obj.x-this.camTarget.x,obj.z-this.camTarget.z);
+      const range=this.monocular?145:54;
+      if(distance>range){const old=this.objectives.get(obj.id);if(old){if(distance>(this.monocular?180:100))this.disposeObjective(obj.id,old);else old.visible=false;}continue;}
       if (obj.kind === 'enemy' && this.cityBarriers?.has(obj.city)) this.cityBarriers.get(obj.city).visible = obj.locked;
       let mesh = this.objectives.get(obj.id);
       if (!mesh) {
@@ -942,7 +925,7 @@ export class Renderer3D {
             const arm=new THREE.Group();arm.position.set(side*.43,1.35,0);arm.add(box(.22,.65,.24,0x9c8058,-.29));body.add(arm);arms.push(arm);
           }
           const hoe=new THREE.Group();hoe.add(box(.07,.85,.07,0x634a2f,-.45));const blade=box(.35,.09,.2,0x848b8a,-.02);hoe.add(blade);hoe.position.set(0,-.4,.25);arms[1].add(hoe);
-          const sword=makeWeapon('sword');sword.position.set(0,-.55,.15);arms[1].add(sword);
+          const sword=makeWeapon('sword',false,false);sword.position.set(0,-.55,.15);arms[1].add(sword);
           mesh.add(body);mesh.userData.villager={body,hat,armor,helmet,legs,arms,hoe,sword};
           const cv=document.createElement('canvas');cv.width=640;cv.height=120;const map=new THREE.CanvasTexture(cv);map.colorSpace=THREE.SRGBColorSpace;
           const status=new THREE.Sprite(new THREE.SpriteMaterial({map,depthTest:true,depthWrite:false}));status.position.y=2.6;status.scale.set(4.2,.8,1);mesh.add(status);mesh.userData.villagerStatus={cv,map,key:''};
@@ -1066,6 +1049,7 @@ export class Renderer3D {
       mesh.visible = obj.kind === 'ore' || obj.hp > 0;
       this.applyHitFlash(mesh, !!obj.hurt && Math.floor(this.time * 12) % 2 === 0);
       mesh.position.set(obj.x, obj.y || 0, obj.z);
+      mesh.traverse(part=>{if(part.isSprite)part.visible=distance<(this.monocular?145:26)});
       if (obj.kind === 'chapter_gate') {
         mesh.children[0].rotation.z = this.time * .6;
         mesh.children[0].material.color.setHex(obj.locked ? 0x666677 : 0x65e8ef);
@@ -1081,7 +1065,7 @@ export class Renderer3D {
         }
       }
       if(mesh.userData.villager){
-        const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;
+        const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;if(soldier)v.sword.userData.loadModel?.();
         v.legs.forEach((leg,i)=>leg.rotation.x=obj.moving?Math.sin(this.time*7+i*Math.PI)*.4:0);v.arms[1].rotation.x=obj.attacking?-1.4:obj.working?Math.sin(this.time*12)*.6-.5:-.2;
         const s=mesh.userData.villagerStatus,key=obj.name+obj.owner+obj.role+obj.hp+(obj.favor?.[viewerName]||0);
         if(s.key!==key){const ctx=s.cv.getContext('2d');ctx.fillStyle='#16231fee';ctx.fillRect(0,0,640,120);ctx.fillStyle=soldier?'#98dfff':'#f1e6b3';ctx.font='bold 29px sans-serif';ctx.textAlign='center';
@@ -1283,6 +1267,14 @@ export class Renderer3D {
   }
 
   draw() {
+    const now=performance.now();this.qualityWindow.frames++;
+    if(now-this.qualityWindow.time>3000){
+      const fps=this.qualityWindow.frames*1000/(now-this.qualityWindow.time),dpr=this.renderer.getPixelRatio();
+      const next=fps<35?Math.max(Math.min(1,this.maxDpr),dpr-.25):fps>57?Math.min(this.maxDpr,dpr+.25):dpr;
+      if(next!==dpr){this.renderer.setPixelRatio(next);this.resize();}
+      this.qualityWindow={time:now,frames:0};
+    }
+    this.renderer.info.reset();
     const overlay = this.viewModel.visible;
     if (overlay) {
       this.viewModel.traverse(object => {

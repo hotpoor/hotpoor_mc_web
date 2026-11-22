@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=51">
+<link rel="stylesheet" href="./style.css?v=54">
 </head>
 <body>
 
@@ -71,6 +71,7 @@
   <button id="feed-poop" class="view-btn">喂狗屎 · R</button>
   <button id="wave-btn" class="view-btn">气功波 · Q</button>
   <button id="collect-btn" class="view-btn">采集水晶 · E</button>
+  <button id="team-transfer-btn" class="view-btn">传送到队友 · C</button>
   <button id="recall-btn" class="view-btn">回城 · H</button>
   <button id="skin-toggle" class="view-btn" aria-controls="game-skins" aria-expanded="false">皮肤 · 史蒂夫</button>
   <div id="game-skins" class="skin-list hidden" role="group" aria-label="切换人物皮肤"></div>
@@ -112,6 +113,7 @@
   <div id="tab-help" class="tab-body">
     <div class="help-title">怎么玩</div>
     <ul class="help-list">
+      <li>按 C 选择同阵营队友，引导 3 秒后传送到其附近安全位置，冷却 30 秒；移动、攻击、受伤会打断。队友离线或阵亡时取消。</li>
       <li>军屯种田：村镇空地有农田和闲居村民。靠近田地按 E 耕地、再按 E 播种，30 秒成熟后按 E 收获粮食。每轮好感 +40，80 好感后靠近对应村民按 E 招募为小兵，跟随助战，归属与好感会保存。</li>
       <li>双方老家水晶对面的「全图时光机」：击碎后恢复全图敌人、动物、水晶、采集点和固定补给；清理临时掉落、飞行弹药，收回携带水晶。已解锁章节和驯服关系保留，两台共用 10 秒恢复时间。</li>
       <li>三国十章：从黄巾起义到三分天下，按章节清城。击败本城全部守军和三名首领后，出口「下一城」驿站开启，靠近按 E；可沿大道步行或经「上一城」返回。城中名将可按 E 对话。时光机石头仍可复活本城敌人，已解锁的章节保持开放。</li>
@@ -142,6 +144,7 @@
   <div class="mini-legend"><span class="l-red">■ 赤焰老家</span><span class="l-blue">■ 苍蓝老家</span><span class="l-pool">● 回血池</span></div>
 </div>
 
+<div id="team-transfer-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="team-transfer-title"><div class="panel transfer-card"><h3 id="team-transfer-title">选择队友 · C</h3><p>引导 3 秒后抵达队友附近，冷却 30 秒。移动、受击或攻击会打断。</p><div id="team-transfer-targets"></div><button id="team-transfer-close" class="view-btn">取消 · Esc</button></div></div>
 <div id="kill-banner"></div>
 <div id="event-log"></div>
 
@@ -195,6 +198,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=53"></script>
+<script type="module" src="./main.js?v=54"></script>
 </body>
 </html>

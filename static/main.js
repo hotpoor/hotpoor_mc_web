@@ -98,6 +98,8 @@ function onWelcome(msg) {
   G.name = msg.name;
   G.team = msg.team;
   G.world = msg.world;
+  G.blockIndex = new Map();
+  for(const block of G.world.blocks){const key=Math.floor(block.x/4)+','+Math.floor(block.z/4);if(!G.blockIndex.has(key))G.blockIndex.set(key,[]);G.blockIndex.get(key).push(block);}
   G.joined = true;
   updateSkinButton();
   G.weapon = "";
@@ -182,7 +184,7 @@ async function initRenderer() {
 // ---------------------------------------------------------------- state
 function applyState(s) {
   const seen = new Set();
-  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel'].includes(ev.k)).map(ev => ev.id));
+  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer'].includes(ev.k)).map(ev => ev.id));
   for (const p of s.players) {
     seen.add(p.id);
     let o = G.players.get(p.id);
@@ -203,7 +205,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, hurt: p.hurt, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, transferTarget: p.transfer_target, transferCd: p.transfer_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, hurt: p.hurt, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -274,6 +276,7 @@ function applyState(s) {
       ? G.world.teams[team].short + '水晶 ' + crystal.hp + '/' + crystal.max_hp
       : G.world.teams[team].short + '基地与泉水回血暂停 ' + crystal.cooldown + ' 秒';
   }
+  if(!$('team-transfer-panel').classList.contains('hidden')) renderTransferTargets();
   for (const ev of (s.events || [])) handleEvent(ev);
   G.renderer?.syncArrows?.(s.arrows || []);
 }
@@ -307,6 +310,10 @@ function handleEvent(ev) {
       break;
     case 'story':
       if (ev.id === G.id) { banner(ev.text); log(ev.text, 'join'); }
+      break;
+    case 'team_transfer':
+      G.renderer?.spawnSlam?.({x:ev.x,y:0,z:ev.z});
+      if(ev.id===G.id){banner('已传送至队友 '+ev.target+' 附近');if(G.me)G.renderer?.camTarget?.set(G.me.rx,0,G.me.rz);}
       break;
     case 'chapter_travel':
       if (ev.id === G.id) {
@@ -395,6 +402,8 @@ function mapKey(key) {
 window.addEventListener('keydown', e => {
   if (e.isComposing || (e.target instanceof HTMLInputElement) || !G.joined) return;
   const k = mapKey(e.key);
+  if(!$('team-transfer-panel').classList.contains('hidden')){if(k==='escape'||k==='c')closeTransferPanel();e.preventDefault();return;}
+  if(k==='c'&&!e.repeat){e.preventDefault();openTransferPanel();return;}
   if (k === 'enter') {
     e.preventDefault();
     if (!G.chatOpen) openChat(); else { sendChat(); closeChat(); }
@@ -489,7 +498,9 @@ function clientCollides(x, z) {
   for (const moat of G.world.moats || []) {
     if (x > moat.x0 - .36 && x < moat.x1 + .36 && z > moat.z0 - .36 && z < moat.z1 + .36) return true;
   }
-  for (const b of G.world.blocks) {
+  const nearby=[];
+  for(let bx=Math.floor((x-.86)/4);bx<=Math.floor((x+.86)/4);bx++)for(let bz=Math.floor((z-.86)/4);bz<=Math.floor((z+.86)/4);bz++)nearby.push(...(G.blockIndex.get(bx+','+bz)||[]));
+  for (const b of nearby) {
     if (G.me.targetJump < b.h && Math.abs(x - b.x) < 0.86 && Math.abs(z - b.z) < 0.86) return true;
   }
   return false;
@@ -567,6 +578,25 @@ function interactCrystal() {
 }
 
 $('collect-btn').addEventListener('click', interactCrystal);
+
+function closeTransferPanel(){ $('team-transfer-panel').classList.add('hidden'); }
+function renderTransferTargets(){
+  const friends=[...G.players.values()].filter(p=>p.id!==G.id&&p.team===G.team);
+  const key=friends.map(p=>p.id+':'+p.alive+':'+Math.round(p.hp)+':'+Math.round(p.rx)+':'+Math.round(p.rz)).join('|');
+  if(G.transferListKey===key)return;
+  G.transferListKey=key;
+  $('team-transfer-targets').innerHTML=friends.length?friends.map(p=>'<button class="view-btn transfer-target" data-target="'+esc(p.id)+'" '+(!p.alive?'disabled':'')+'>'+esc(p.name)+' · '+(p.alive?Math.round(p.hp)+'血 · '+Math.round(Math.hypot(p.rx-G.me.rx,p.rz-G.me.rz))+'米':'已阵亡')+'</button>').join(''):'<p>暂无可传送的队友，请让朋友加入同一阵营。</p>';
+  for(const button of $('team-transfer-targets').querySelectorAll('button'))button.onclick=()=>{cancelDraw();G.attacking=false;send({t:'team_transfer',target:button.dataset.target});closeTransferPanel();};
+}
+function openTransferPanel(){
+  if(!G.me?.alive||G.me.recall||G.me.transferCd||G.chatOpen)return;
+  G.keys.clear();G.attacking=false;cancelDraw();
+  if(document.pointerLockElement)document.exitPointerLock();
+  G.transferListKey=null;
+  $('team-transfer-panel').classList.remove('hidden');renderTransferTargets();
+}
+$('team-transfer-btn').addEventListener('click',openTransferPanel);
+$('team-transfer-close').addEventListener('click',closeTransferPanel);
 
 function recallHome() {
   if (!G.me?.alive || G.me.recall || G.me.recallCd || G.chatOpen) return;
@@ -932,7 +962,9 @@ function updateHud() {
   $('feed-poop').disabled = !me.alive || !me.poop || !near;
   $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : field ? '军屯 · ' + ['E 耕地','E 播种','成长 ' + field.grow_cd + '秒','E 收获'][field.stage] : nearFarmer ? '村民交互 · E' : '拾取 / 交互 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
-  $('recall-btn').textContent = me.recall ? '回城中 · ' + me.recall.toFixed(1) + ' 秒'
+  $('team-transfer-btn').textContent=me.recall&&me.transferTarget?'传送队友中 · '+me.recall.toFixed(1)+'秒':me.transferCd?'传送队友 · '+me.transferCd+'秒':'传送到队友 · C';
+  $('team-transfer-btn').disabled=!me.alive||!!me.recall||!!me.transferCd;
+  $('recall-btn').textContent = me.recall ? (me.transferTarget?'传送中 · ':'回城中 · ') + me.recall.toFixed(1) + ' 秒'
     : me.recallCd ? '回城 · ' + me.recallCd + ' 秒' : '回城 · H';
   $('recall-btn').disabled = !me.alive || !!me.recall || !!me.recallCd;
   $('gun-btn').textContent = '连射枪 · 5 · ' + (me.gunCd > 0 ? Math.ceil(me.gunCd) + ' 秒' : me.ammo + '/30');
@@ -951,6 +983,7 @@ function updateHud() {
 function updateDeath() {
   const me = G.me;
   const dying = !!(me && !me.alive);
+  if(dying)closeTransferPanel();
   if (dying && G.monocular) { G.monocular = false; G.renderer?.setMonocular(false); $('monocular-view').classList.add('hidden'); $('monocular-btn').textContent = '单筒望远镜 · B'; setViewMode(G.scopeReturn); }
   $('death-overlay').classList.toggle('hidden', !dying);
   if (!dying) return;
