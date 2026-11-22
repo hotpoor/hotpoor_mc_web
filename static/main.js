@@ -354,6 +354,13 @@ function handleEvent(ev) {
     case 'attack':
       if (G.renderer && ev.id !== G.id) G.renderer.spawnSwing(ev.id);
       break;
+    case 'farm_work':
+      G.renderer?.spawnFarm?.(ev);
+      G.renderer?.spawnSwing?.(ev.id);
+      break;
+    case 'militia_recruit':
+      if (ev.id === G.id) banner('军屯小兵加入，跟随助战！');
+      break;
     case 'object_hit':
       G.renderer?.spawnHit?.(ev);
       if (G.renderer) floatText({ rx: ev.x, rz: ev.z }, '-' + ev.dmg, '#ffb19d');
@@ -907,6 +914,14 @@ function updateHud() {
   const uses = me.weapons?.[G.weapon];
   $('drop-weapon').disabled = !me.alive || !uses;
   $('weapon-life').textContent = uses === -1 ? '剩余次数 · 无限' : uses != null ? '剩余次数 · ' + uses : '';
+  const villagers = (G.objects || []).filter(obj => obj.kind === 'villager');
+  const field = (G.objects || []).filter(obj => obj.kind === 'farm' && Math.hypot(obj.x - me.rx, obj.z - me.rz) < 2).sort((a,b)=>Math.hypot(a.x-me.rx,a.z-me.rz)-Math.hypot(b.x-me.rx,b.z-me.rz))[0];
+  const nearFarmer = villagers.filter(obj=>obj.hp>0 && Math.hypot(obj.x-me.rx,obj.z-me.rz)<2).sort((a,b)=>Math.hypot(a.x-me.rx,a.z-me.rz)-Math.hypot(b.x-me.rx,b.z-me.rz))[0];
+  const army = villagers.filter(obj => obj.owner === G.name);
+  const fieldFarmer = field ? villagers.find(obj=>obj.id===field.farmer_id) : null;
+  $('farm-status').textContent = field ? '军屯 · ' + ['E 耕地','E 播种','生长中 ' + field.grow_cd + '秒','E 收获粮食'][field.stage] + (fieldFarmer?.owner && fieldFarmer.owner !== G.name ? ' · 农民已归属 ' + fieldFarmer.owner : '')
+    : nearFarmer ? nearFarmer.role === 'soldier' ? nearFarmer.name + ' · ' + nearFarmer.owner + '的小兵 · ' + nearFarmer.hp + '/120' : nearFarmer.name + ' · 好感 ' + (nearFarmer.favor?.[G.name] || 0) + '/80 · E 招募'
+    : '军屯小兵 ' + army.filter(npc=>npc.hp>0).length + '名' + (army.some(npc=>!npc.hp) ? ' · 伤兵恢复中' : '') + ' · 村镇按 E 耕种结交村民';
   $('pet-inventory').textContent = '狗粮 / 兽肉 ' + (me.food || 0) + '/20 · 狗屎 ' + (me.poop || 0) + '/10';
   const dogs = (G.objects || []).filter(obj => obj.kind === 'animal' && obj.animal === 'dog');
   const near = dogs.filter(obj => obj.hp > 0 && Math.hypot(obj.x - me.rx, obj.z - me.rz) < 4).sort((a, b) => Math.hypot(a.x - me.rx, a.z - me.rz) - Math.hypot(b.x - me.rx, b.z - me.rz))[0];
@@ -915,7 +930,7 @@ function updateHud() {
     : mine.length ? '伙伴犬 ' + mine.length + '只 · ' + mine.map(dog => dog.hp > 0 ? dog.hp + '/' + dog.max_hp : '恢复中 ' + dog.cooldown + '秒').join('，') : '靠近村犬 · F 喂粮 / R 喂狗屎';
   $('feed-dog').disabled = !me.alive || !me.food || !near;
   $('feed-poop').disabled = !me.alive || !me.poop || !near;
-  $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : '采集水晶 · E';
+  $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : field ? '军屯 · ' + ['E 耕地','E 播种','成长 ' + field.grow_cd + '秒','E 收获'][field.stage] : nearFarmer ? '村民交互 · E' : '拾取 / 交互 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
   $('recall-btn').textContent = me.recall ? '回城中 · ' + me.recall.toFixed(1) + ' 秒'
     : me.recallCd ? '回城 · ' + me.recallCd + ' 秒' : '回城 · H';

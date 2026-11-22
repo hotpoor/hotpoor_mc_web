@@ -67,7 +67,7 @@ export class Renderer2D {
   }
 
   syncObjectives(objects) {
-    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup', 'enemy', 'time_stone', 'story_npc', 'chapter_gate', 'armor_pickup', 'animal', 'food_pickup', 'poop_pickup'].includes(obj.kind));
+    this.oreSites = objects.filter(obj => ['ore', 'syllable', 'forge', 'dummy', 'weapon_pickup', 'enemy', 'time_stone', 'story_npc', 'chapter_gate', 'armor_pickup', 'animal', 'food_pickup', 'poop_pickup', 'farm', 'villager'].includes(obj.kind));
   }
 
   project(x, y, z) {

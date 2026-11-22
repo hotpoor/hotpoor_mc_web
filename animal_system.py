@@ -298,12 +298,16 @@ def advance(game, dt, now):
                 game.damage_object(owner, target, 12, now)
         # Wild beasts also defend themselves against a biting companion.
         if not dog and now - animal['last_attack'] >= 1.2:
-            pet = next((o for o in animals if o['animal'] == 'dog' and o['owner'] and o['hp'] > 0
+            pet = next((o for o in game.objects if (o['kind'] == 'animal' and o['animal'] == 'dog' or o['kind'] == 'villager' and o['role'] == 'soldier') and o['owner'] and o['hp'] > 0
                         and math.hypot(o['x'] - animal['x'], o['z'] - animal['z']) <= 1.7
                         and not game.blocked(animal['x'], animal['z'], o['x'], o['z'])), None)
             if pet:
                 animal['last_attack'] = now
-                hurt(game, pet, 24 if animal['animal'] == 'tiger' else 10, now)
+                if pet['kind'] == 'villager':
+                    import farm_system
+                    farm_system.hurt(game, pet, 24 if animal['animal'] == 'tiger' else 10, now)
+                else:
+                    hurt(game, pet, 24 if animal['animal'] == 'tiger' else 10, now)
     # Resolve dog/dog overlap with collision-safe, symmetric pushes.
     dogs = [o for o in animals if o['animal'] == 'dog' and o['hp'] > 0]
     for _ in range(3):

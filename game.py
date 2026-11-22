@@ -21,6 +21,7 @@ from itertools import combinations
 from tornado.ioloop import PeriodicCallback
 from campaign import CHARACTERS, NAME_SKINS
 import animal_system
+import farm_system
 
 from world import (RULES, TEAMS, build_world, collides, in_own_base,
                    pool_at)
@@ -58,6 +59,7 @@ class Player:
     food: int = 3
     poop: int = 0
     last_feed: float = 0.0
+    last_farm: float = 0.0
     score: int = 0                 # cumulative, persisted in SQLite
     kills: int = 0                 # cumulative
     deaths: int = 0                # cumulative
@@ -284,6 +286,7 @@ class Game:
                                      "x": x, "z": z, "home_x": x, "home_z": z, "yaw": 0,
                                      "hp": 1, "max_hp": 1, "ready": 0})
         animal_system.initialize(self)
+        farm_system.initialize(self)
         self.world["armor_types"] = ARMOR_TYPES
         self.world["materials"] = MATERIALS
         self.world["weapon_uses"] = WEAPON_USES
@@ -660,6 +663,7 @@ class Game:
             return
         available = [obj for obj in self.objects
                      if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
+                         or obj["kind"] in ("farm", "villager")
                          or (obj["kind"] == "food_pickup" and player.food < 20)
                          or (obj["kind"] == "poop_pickup" and player.poop < 10)
                          or (obj["kind"] == "armor_pickup" and (not player.armor or obj["durability"] > player.armor["durability"] or ARMOR_TYPES[obj["armor_kind"]]["reduction"] > player.armor["reduction"]))
@@ -667,6 +671,12 @@ class Game:
                          or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < obj.get("uses", WEAPON_USES["pickup"])))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
+            if ore["kind"] == "farm":
+                farm_system.work(self, player, ore, now)
+                return
+            if ore["kind"] == "villager":
+                farm_system.recruit(self, player, ore, now)
+                return
             if ore["kind"] == "poop_pickup":
                 player.poop += 1
                 self.objects.remove(ore)
@@ -796,7 +806,7 @@ class Game:
             player.crystal_source = None
         for obj in self.objects:
             obj.update(hp=obj["max_hp"], ready=0, hurt_until=0)
-            if obj["kind"] in ("enemy", "animal"):
+            if obj["kind"] in ("enemy", "animal", "villager"):
                 obj.update(x=obj["home_x"], z=obj["home_z"], last_attack=now + 1)
             if obj["kind"] == "animal":
                 obj.update(angry_at="", angry_until=0, hunger=100, last_fed=now, feeding_until=0, stuck=0)
@@ -807,7 +817,11 @@ class Game:
         for arrow_id, arrow in self.arrows.items():
             self.emit({"k": "arrow_stop", "arrow": arrow_id, "position": arrow["position"], "velocity": arrow["velocity"], "rocket": arrow["rocket"]})
         self.arrows.clear()
+        for plot in self.objects:
+            if plot["kind"] == "farm":
+                plot.update(stage=0, grow_until=0)
         animal_system.save(self)
+        farm_system.save(self)
         self.emit({"k": "world_reset", "x": source["x"], "z": source["z"]})
 
     def damage_object(self, player, obj, amount, now):
@@ -1137,12 +1151,15 @@ class Game:
             if enemy["kind"] != "enemy" or enemy["hp"] <= 0 or not self.city_unlocked(enemy["city"]):
                 continue
             city = cities[enemy["city"]]
-            pet = next((o for o in self.objects if o["kind"] == "animal" and o["animal"] == "dog"
+            pet = next((o for o in self.objects if (o["kind"] == "animal" and o["animal"] == "dog" or o["kind"] == "villager" and o["role"] == "soldier")
                         and o["owner"] and o["hp"] > 0 and math.hypot(o["x"] - enemy["x"], o["z"] - enemy["z"]) <= 1.9
                         and not self.blocked(enemy["x"], enemy["z"], o["x"], o["z"])), None)
             if pet and now - enemy["last_attack"] >= 1.1:
                 enemy["last_attack"] = now
-                animal_system.hurt(self, pet, 20 if enemy.get("boss") else 8, now)
+                if pet["kind"] == "villager":
+                    farm_system.hurt(self, pet, 20 if enemy.get("boss") else 8, now)
+                else:
+                    animal_system.hurt(self, pet, 20 if enemy.get("boss") else 8, now)
                 continue
             candidates = [p for p in self.players.values() if p.alive
                           and abs(p.x - city["x"]) < 17 and abs(p.z - city["z"]) < 17
@@ -1193,7 +1210,7 @@ class Game:
         for obj in self.objects:
             if not obj["hp"] and obj["ready"] is not None and now >= obj["ready"]:
                 obj["hp"] = obj["max_hp"]
-                if obj["kind"] == "animal":
+                if obj["kind"] in ("animal", "villager"):
                     obj.update(x=obj["home_x"], z=obj["home_z"], last_attack=now,
                                angry_at="", angry_until=0)
         active_crystals = {obj["team"] for obj in self.objects if obj["kind"] == "crystal" and obj["hp"] > 0}
@@ -1244,6 +1261,7 @@ class Game:
         self.advance_arrows(dt, now)
         self.advance_enemies(dt, now)
         self.advance_animals(dt, now)
+        farm_system.advance(self, dt, now)
         for p in self.players.values():
             if not p.recall_until:
                 continue
@@ -1298,7 +1316,7 @@ class Game:
             "team_score": self.team_score,
             "craft_modes": self.craft_modes,
             "campaign_cleared": sorted(self.cleared_cities),
-            "objects": [{**{key: value for key, value in obj.items() if not key.startswith("_")}, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
+            "objects": [{**{key: value for key, value in obj.items() if not key.startswith("_")}, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "grow_cd": max(0, math.ceil(obj.get("grow_until", 0) - now)) if obj.get("stage") == 2 else 0, "working": now < obj.get("working_until", 0), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }
 

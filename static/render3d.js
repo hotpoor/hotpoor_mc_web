@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=51';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=52';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -916,6 +916,36 @@ export class Renderer3D {
             mesh.add(label);
           }
 
+        } else if (obj.kind === 'farm') {
+          const soil = box(2.4,.08,2.4,0x795939,.04);mesh.add(soil);
+          const furrows = new THREE.Group();
+          for(const x of [-.8,0,.8]) { const row=box(.08,.025,2.25,0x32251b,.095);row.position.x=x;furrows.add(row); }
+          mesh.add(furrows);
+          const crops=new THREE.Group(),heads=new THREE.Group();
+          for(const x of [-.75,0,.75])for(const z of [-.65,.65]){
+            const stem=box(.07,.6,.07,0x76a549,.4);stem.position.set(x,.4,z);crops.add(stem);
+            const head=box(.2,.25,.16,0xe6c252,.77);head.position.set(x,.77,z);heads.add(head);
+          }
+          crops.add(heads);mesh.add(crops);mesh.userData.farm={soil,furrows,crops,heads};
+          const label=labelSprite('军屯田 · E', '#e5da9c',448,100,38);label.position.y=1.45;label.scale.set(3,.65,1);label.material.depthTest=true;mesh.add(label);
+          mesh.userData.farmLabel=label;
+        } else if (obj.kind === 'villager') {
+          const body=new THREE.Group();
+          body.add(box(.6,.75,.4,0x8e724a,1.0),box(.52,.52,.52,0xd0a481,1.65));
+          const nose=box(.14,.17,.18,0xbd8e6b,1.58);nose.position.z=.34;body.add(nose);
+          for(const x of [-.13,.13]){const eye=box(.065,.06,.02,0x252628,1.73);eye.position.set(x,1.73,.27);body.add(eye);}
+          const hat=new THREE.Group();hat.add(box(.8,.09,.8,0xd2b66d,1.96),box(.55,.15,.55,0xb59552,2.05));body.add(hat);
+          const armor=box(.65,.6,.45,0x81939b,1.03),helmet=box(.59,.17,.59,0x81939b,1.95);body.add(armor,helmet);
+          const legs=[],arms=[];
+          for(const side of [-1,1]){
+            const leg=new THREE.Group();leg.position.set(side*.17,.65,0);leg.add(box(.24,.64,.3,0x504638,-.32));body.add(leg);legs.push(leg);
+            const arm=new THREE.Group();arm.position.set(side*.43,1.35,0);arm.add(box(.22,.65,.24,0x9c8058,-.29));body.add(arm);arms.push(arm);
+          }
+          const hoe=new THREE.Group();hoe.add(box(.07,.85,.07,0x634a2f,-.45));const blade=box(.35,.09,.2,0x848b8a,-.02);hoe.add(blade);hoe.position.set(0,-.4,.25);arms[1].add(hoe);
+          const sword=makeWeapon('sword');sword.position.set(0,-.55,.15);arms[1].add(sword);
+          mesh.add(body);mesh.userData.villager={body,hat,armor,helmet,legs,arms,hoe,sword};
+          const cv=document.createElement('canvas');cv.width=640;cv.height=120;const map=new THREE.CanvasTexture(cv);map.colorSpace=THREE.SRGBColorSpace;
+          const status=new THREE.Sprite(new THREE.SpriteMaterial({map,depthTest:true,depthWrite:false}));status.position.y=2.6;status.scale.set(4.2,.8,1);mesh.add(status);mesh.userData.villagerStatus={cv,map,key:''};
         } else if (obj.kind === 'animal') {
           const tiger = obj.animal === 'tiger', dog = obj.animal === 'dog';
           const color = tiger ? 0xd89532 : dog ? 0x9b6745 : 0x8c949d;
@@ -1041,6 +1071,22 @@ export class Renderer3D {
         mesh.children[0].material.color.setHex(obj.locked ? 0x666677 : 0x65e8ef);
         mesh.userData.gateStatus.visible = obj.locked;
       }
+      if(mesh.userData.farm){
+        const f=mesh.userData.farm;f.soil.material.color.setHex(obj.stage?0x65432c:0x795939);f.furrows.visible=obj.stage>0;f.crops.visible=obj.stage>=2;f.heads.visible=obj.stage===3;
+        f.crops.scale.y=obj.stage===2?.3+.7*(1-(obj.grow_cd||0)/30):1;
+        const text=['E 耕地','E 播种','成长 '+obj.grow_cd+'秒','已成熟 · E 收获'][obj.stage];
+        if(mesh.userData.farmText!==text){
+          const old=mesh.userData.farmLabel;mesh.remove(old);old.material.map.dispose();old.material.dispose();
+          const label=labelSprite('军屯田 · '+text,'#e5da9c',448,100,36);label.position.y=1.45;label.scale.set(3,.65,1);label.material.depthTest=true;mesh.add(label);mesh.userData.farmLabel=label;mesh.userData.farmText=text;
+        }
+      }
+      if(mesh.userData.villager){
+        const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;
+        v.legs.forEach((leg,i)=>leg.rotation.x=obj.moving?Math.sin(this.time*7+i*Math.PI)*.4:0);v.arms[1].rotation.x=obj.attacking?-1.4:obj.working?Math.sin(this.time*12)*.6-.5:-.2;
+        const s=mesh.userData.villagerStatus,key=obj.name+obj.owner+obj.role+obj.hp+(obj.favor?.[viewerName]||0);
+        if(s.key!==key){const ctx=s.cv.getContext('2d');ctx.fillStyle='#16231fee';ctx.fillRect(0,0,640,120);ctx.fillStyle=soldier?'#98dfff':'#f1e6b3';ctx.font='bold 29px sans-serif';ctx.textAlign='center';
+          ctx.fillText(obj.name+' · '+(soldier?obj.owner+'的小兵':'闲居村民 · E'),320,36,620);ctx.fillStyle='#98d899';ctx.fillRect(10,60,620*obj.hp/obj.max_hp,48);ctx.fillStyle='#fff';ctx.fillText(soldier?obj.hp+'/'+obj.max_hp:'好感 '+(obj.favor?.[viewerName]||0)+'/80 · 帮忙耕种可招募',320,94,620);s.map.needsUpdate=true;s.key=key;}
+      }
       if (mesh.userData.animal) {
         const { body, legs, collar } = mesh.userData.animal;
         body.rotation.y = obj.yaw || 0;
@@ -1158,6 +1204,12 @@ export class Renderer3D {
         if (mat.emissive) mat.emissive.copy(active ? new THREE.Color(0x84291e) : mat.userData.hitEmissive);
       }
     });
+  }
+
+  spawnFarm(event) {
+    this.spawnHit({x:event.x,y:.2,z:event.z});
+    const hit=this.hits[this.hits.length-1];
+    for(const spark of hit.mesh.children)spark.material.color.setHex(event.harvest?0xf6d773:0x8fd66a);
   }
 
   spawnHit(event) {
