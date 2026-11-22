@@ -127,6 +127,23 @@ def main():
         assert saved['owner'] == p.name and round(saved['favor'][p.name]) == 100
         assert all(not collides(o['x'], o['z'], g.blocks, radius=.25) for o in g.objects
                    if o['kind'] in ('food_pickup', 'poop_pickup') and o['id'].startswith('random-'))
+        # Death permanently clears the bond, including restart and global-machine revival.
+        animals.hurt(g,dog,10000,now+40)
+        assert dog['hp']==0 and not dog['owner'] and dog['favor']=={}
+        reloaded=Game(db)
+        new_dog=next(o for o in reloaded.objects if o['id']==dog['id'])
+        assert not new_dog['owner'] and new_dog['favor']=={}
+        machine=next(o for o in g.objects if o.get('global'))
+        g.restore_world(now+41,machine)
+        assert dog['hp']==100 and not dog['owner'] and dog['favor']=={}
+        p.x,p.z=dog['x'],dog['z']+1
+        p.food=3
+        for i in range(3):animals.feed(g,p,now+50+i)
+        assert dog['owner']==p.name and dog['favor'][p.name]==100
+        animals.hurt(g,dog,10000,now+60)
+        dog['ready']=time.monotonic()-1
+        g.tick()
+        assert dog['hp']==100 and not dog['owner'] and dog['favor']=={}
         print('ANIMALS PASSED: individual trust, bites, feeding cooldown, taming, no theft, hunger/poop reactions, shared inventory, predators, loot, follow, guard combat, persistence, safe random drops')
 
 

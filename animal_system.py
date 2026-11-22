@@ -104,7 +104,12 @@ def hurt(game, animal, amount, now, player=None):
         return
     animal['ready'] = now + 60
     animal['angry_at'], animal['angry_until'] = '', 0
-    if animal['animal'] != 'dog':
+    if animal['animal'] == 'dog':
+        animal.update(owner='', favor={}, hunger=70, feeding_until=0, stuck=0)
+        for key in ('_path', '_path_goal', '_path_ready', 'prey'):
+            animal.pop(key, None)
+        save(game)
+    else:
         tiger = animal['animal'] == 'tiger'
         game.objects.append({'id': 'meat-' + uuid.uuid4().hex, 'kind': 'food_pickup',
                              'text': '兽肉', 'amount': 4 if tiger else 2, 'x': animal['x'], 'z': animal['z'],

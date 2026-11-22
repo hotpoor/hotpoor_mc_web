@@ -322,7 +322,7 @@ function handleEvent(ev) {
       if (ev.id === G.id) { banner(ev.text); log(ev.text, 'join'); }
       break;
     case 'animal_down':
-      log(ev.name + '被击败' + (ev.name === '村犬' ? '，60 秒后在村镇恢复' : '，兽肉与兽皮可按 E 拾取'), 'kill');
+      log(ev.name + '被击败' + (ev.name === '村犬' ? '，60 秒后重新出现，需要重新培养' : '，兽肉与兽皮可按 E 拾取'), 'kill');
       G.renderer?.spawnSlam?.({ x: ev.x, y: 0, z: ev.z });
       break;
     case 'enemy_down':
