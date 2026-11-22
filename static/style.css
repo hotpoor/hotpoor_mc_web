@@ -314,3 +314,7 @@ body.first-person #view { cursor: crosshair; }
 #monocular-view::before { width: 10vmin; height: 1px; }
 #monocular-view::after { width: 1px; height: 10vmin; }
 #monocular-view span { position: absolute; top: calc(50% + 33vmin); left: 50%; transform: translateX(-50%); color: #eee; white-space: nowrap; font-size: 12px; }
+
+#damage-flash.hurt-pulse { animation: hurt-pulse .44s ease-out; }
+@keyframes hurt-pulse { 0%, 40% { opacity: .85; } 24%, 75%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #damage-flash.hurt-pulse { animation: none; } }

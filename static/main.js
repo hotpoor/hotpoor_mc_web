@@ -203,7 +203,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, hurt: p.hurt, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -329,6 +329,11 @@ function handleEvent(ev) {
       log('击败 ' + ev.name, 'kill');
       G.renderer?.spawnSlam?.({ x: ev.x, y: 0, z: ev.z });
       break;
+    case 'world_reset':
+      banner('全图时光倒流！敌人、动物、水晶与场地补给已恢复');
+      log('老家全图时光机启动，已解锁章节和伙伴关系保留', 'join');
+      G.renderer?.spawnSlam?.({ x: ev.x, y: 0, z: ev.z });
+      break;
     case 'city_reset': {
       const city = G.world.cities?.find(city => city.id === ev.city);
       banner((city?.name || '城市') + ' · 时光倒流，全城敌人复活！');
@@ -349,10 +354,15 @@ function handleEvent(ev) {
     case 'attack':
       if (G.renderer && ev.id !== G.id) G.renderer.spawnSwing(ev.id);
       break;
+    case 'object_hit':
+      G.renderer?.spawnHit?.(ev);
+      if (G.renderer) floatText({ rx: ev.x, rz: ev.z }, '-' + ev.dmg, '#ffb19d');
+      break;
     case 'hit': {
       const victim = G.players.get(ev.id);
-      if (victim && G.renderer) floatText(victim, '-' + ev.dmg, '#ff8a7d');
-      if (ev.id === G.id) flashDamage();
+      G.renderer?.spawnHit?.(ev);
+      if (victim && G.renderer) floatText(victim, ev.dmg ? '-' + ev.dmg : '格挡', ev.dmg ? '#ff8a7d' : '#ffffff');
+      if (ev.id === G.id && ev.dmg > 0) flashDamage();
       break;
     }
     case 'kill':
@@ -856,9 +866,12 @@ function floatText(o, text, color) {
 
 function flashDamage() {
   const f = $('damage-flash');
+  f.classList.remove('hurt-pulse');
+  void f.offsetWidth;
+  f.classList.add('hurt-pulse');
   f.style.opacity = '0.85';
   clearTimeout(G.flashTimer);
-  G.flashTimer = setTimeout(() => { f.style.opacity = '0'; }, 90);
+  G.flashTimer = setTimeout(() => { f.style.opacity = '0'; f.classList.remove('hurt-pulse'); }, 450);
 }
 
 function banner(text) {

@@ -2,7 +2,7 @@
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=50';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=51';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -62,6 +62,7 @@ export class Renderer3D {
     this.arrows = new Map();
     this.waves = [];
     this.repairs = [];
+    this.hits = [];
     this.objectives = new Map();
     this.recallEffects = new Map();
     this.bowKick = 0;
@@ -106,7 +107,7 @@ export class Renderer3D {
   buildViewModel() {
     const vm = new THREE.Group();
     vm.rotation.y = Math.PI;
-    vm.position.set(0, -0.34, -0.43);
+    vm.position.set(0, -0.26, -0.50);
     vm.scale.setScalar(0.76);
     this.viewRig = this.makeArmRig(vm, 0x6ab04c, true);
     vm.visible = false;
@@ -658,6 +659,7 @@ export class Renderer3D {
         this.applyArmSkin(avatar.rig, p.skin || 'steve');
         avatar.skin = p.skin;
       }
+      this.applyHitFlash(g, !!p.hurt && Math.floor(this.time * 12) % 2 === 0);
       const selfHidden = first && me && p.id === me.id;
       g.visible = !!p.alive && !selfHidden;
       if (!p.alive) {
@@ -802,12 +804,25 @@ export class Renderer3D {
       }
       return false;
     });
+    this.hits = this.hits.filter(hit => {
+      hit.age += dt;
+      for (const spark of hit.mesh.children) {
+        spark.position.copy(spark.userData.velocity).multiplyScalar(hit.age);
+        spark.position.y -= 2 * hit.age * hit.age;
+        spark.material.opacity = Math.max(0, 1 - hit.age / .35);
+      }
+      if (hit.age < .35) return true;
+      this.scene.remove(hit.mesh);
+      for (const spark of hit.mesh.children) { spark.geometry.dispose(); spark.material.dispose(); }
+      return false;
+    });
     this.swingSelf = Math.max(0, this.swingSelf - dt);
     this.bowKick = Math.max(0, this.bowKick - dt);
     if (this.viewModel.visible) {
       const swing = Math.sin(Math.PI * this.swingSelf / .24);
       this.applyArmSkin(this.viewRig, me.skin || 'steve');
       this.applyArmArmor(this.viewRig, me.armor);
+      this.applyHitFlash(this.viewModel, !!me.hurt && Math.floor(this.time * 12) % 2 === 0);
       this.poseArms(this.viewRig, me.weapon, me.draw ?? null, swing, 0, this.bowKick, me.carriesCrystal);
     }
   }
@@ -867,9 +882,14 @@ export class Renderer3D {
           } else if (obj.kind === 'time_stone') {
             mesh.add(box(1.2, 1.5, .8, 0x46546f, .75));
             const clock = new THREE.Mesh(new THREE.TorusGeometry(.36, .06, 8, 24),
-              new THREE.MeshBasicMaterial({ color: 0x7ffff1 }));
+              new THREE.MeshBasicMaterial({ color: obj.global ? 0xe7abff : 0x7ffff1 }));
             clock.position.set(0, .85, .43);
             mesh.add(clock);
+            if (obj.global) {
+              const halo = new THREE.Mesh(new THREE.TorusGeometry(1.1, .09, 8, 40),
+                new THREE.MeshBasicMaterial({ color: 0xd1a1ff }));
+              halo.position.y = 1.1; mesh.add(halo);
+            }
             const hand = box(.05, .3, .04, 0x7ffff1, .95); hand.position.z = .44; mesh.add(hand);
           } else {
             mesh.add(box(.54, .52, .49, 0xc6a45f, 1.65),
@@ -1014,6 +1034,7 @@ export class Renderer3D {
         this.objectives.set(obj.id, mesh);
       }
       mesh.visible = obj.kind === 'ore' || obj.hp > 0;
+      this.applyHitFlash(mesh, !!obj.hurt && Math.floor(this.time * 12) % 2 === 0);
       mesh.position.set(obj.x, obj.y || 0, obj.z);
       if (obj.kind === 'chapter_gate') {
         mesh.children[0].rotation.z = this.time * .6;
@@ -1121,6 +1142,36 @@ export class Renderer3D {
     ring.visible = label.visible = false;
     this.scene.add(orb, ring, label);
     this.repairs.push({ start, end, orb, ring, label, age: 0 });
+  }
+
+  applyHitFlash(root, active) {
+    if (root.userData.hitFlash === active) return;
+    root.userData.hitFlash = active;
+    root.traverse(mesh => {
+      if (!mesh.isMesh) return;
+      for (const mat of (Array.isArray(mesh.material) ? mesh.material : [mesh.material])) {
+        if (!mat?.color) continue;
+        mat.userData.hitColor ||= mat.color.clone();
+        if (mat.emissive && !mat.userData.hitEmissive) mat.userData.hitEmissive = mat.emissive.clone();
+        mat.color.copy(mat.userData.hitColor);
+        if (active) mat.color.lerp(new THREE.Color(0xff7b68), .6);
+        if (mat.emissive) mat.emissive.copy(active ? new THREE.Color(0x84291e) : mat.userData.hitEmissive);
+      }
+    });
+  }
+
+  spawnHit(event) {
+    const mesh = new THREE.Group();
+    const impact = new THREE.Vector3(event.x, event.y || 1, event.z);
+    mesh.position.copy(impact).addScaledVector(this.camera.position.clone().sub(impact).normalize(), .4);
+    for (let i = 0; i < 8; i++) {
+      const spark = box(.075, .075, .075, i % 2 ? 0xfff2c7 : 0xff8059, 0, true);
+      const angle = i / 8 * Math.PI * 2;
+      spark.userData.velocity = new THREE.Vector3(Math.cos(angle) * 2.3, Math.sin(angle) * 1.8 + .7, (i % 3 - 1) * 1.5);
+      spark.material.transparent = true;
+      mesh.add(spark);
+    }
+    this.scene.add(mesh); this.hits.push({ mesh, age: 0 });
   }
 
   spawnWave(event) {

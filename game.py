@@ -92,6 +92,7 @@ class Player:
     next_round: float = 0.0
     ammo: int = 30
     last_damage_at: float = 0.0
+    hurt_until: float = 0.0
     respawn_at: float = 0.0
     invuln_until: float = 0.0
     heal_rate: float = 0.0
@@ -193,6 +194,10 @@ class Game:
              "hp": 500, "max_hp": 500, "ready": 0}
             for team, cfg in self.world["teams"].items()
         ]
+        for team, cfg in self.world["teams"].items():
+            self.objects.append({"id": "world-time-" + team, "kind": "time_stone", "global": True,
+                                 "base_team": team, "name": "全图时光机 · 击碎恢复全场",
+                                 "x": cfg["spawn"][0], "z": 4, "hp": 100, "max_hp": 100, "ready": 0})
         for x, z in ((-8, 0), (8, 0), (0, -8), (0, 8)):
             if not collides(x, z, self.blocks):
                 self.objects.append({"id": f"bomb-{x}-{z}", "kind": "bomb", "x": x, "z": z,
@@ -770,8 +775,13 @@ class Game:
                              "x": player.x, "y": floor, "z": player.z,
                              "hp": 1, "max_hp": 1, "ready": 0, "source": source, "expires": now + 60})
 
+    def friendly_pet(self, player, obj):
+        if obj.get("animal") != "dog" or not obj.get("owner"):
+            return False
+        return obj["owner"] == player.name or any(p.name == obj["owner"] and p.team == player.team for p in self.players.values())
+
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone", "animal") and obj.get("team") != player.team
+        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone", "animal") and obj.get("team") != player.team and not self.friendly_pet(player, obj)
                 and (not obj.get("city") or self.city_unlocked(obj["city"]))]
 
     @staticmethod
@@ -779,14 +789,38 @@ class Game:
         x, z = obj["x"], obj["z"]
         return ((x - .48, x + .48), (0, 2 if obj["kind"] in ("crystal", "dummy", "enemy") else 1.7), (z - .48, z + .48))
 
+    def restore_world(self, now, source):
+        # Temporary loot is replaced by the original map sources, including carried crystals.
+        self.objects[:] = [obj for obj in self.objects if "expires" not in obj]
+        for player in self.players.values():
+            player.crystal_source = None
+        for obj in self.objects:
+            obj.update(hp=obj["max_hp"], ready=0, hurt_until=0)
+            if obj["kind"] in ("enemy", "animal"):
+                obj.update(x=obj["home_x"], z=obj["home_z"], last_attack=now + 1)
+            if obj["kind"] == "animal":
+                obj.update(angry_at="", angry_until=0, hunger=100, last_fed=now, feeding_until=0, stuck=0)
+                for key in ("_path", "_path_goal", "_path_ready", "prey"):
+                    obj.pop(key, None)
+            if obj.get("global"):
+                obj.update(hp=0, ready=now + 10)
+        for arrow_id, arrow in self.arrows.items():
+            self.emit({"k": "arrow_stop", "arrow": arrow_id, "position": arrow["position"], "velocity": arrow["velocity"], "rocket": arrow["rocket"]})
+        self.arrows.clear()
+        animal_system.save(self)
+        self.emit({"k": "world_reset", "x": source["x"], "z": source["z"]})
+
     def damage_object(self, player, obj, amount, now):
         if obj["hp"] <= 0 or (obj.get("city") and not self.city_unlocked(obj["city"])):
             return
         if obj["kind"] == "animal":
+            if self.friendly_pet(player, obj):
+                return
             animal_system.hurt(self, obj, amount, now, player)
             return
         obj["hp"] = max(0, obj["hp"] - amount)
-        obj["hurt_until"] = now + .18
+        obj["hurt_until"] = now + .45
+        self.emit({"k": "object_hit", "id": obj["id"], "x": obj["x"], "y": 1.1, "z": obj["z"], "dmg": amount, "hp": obj["hp"]})
         if obj["hp"]:
             return
         if obj["kind"] == "enemy":
@@ -819,6 +853,9 @@ class Game:
             self.emit({"k": "enemy_down", "x": obj["x"], "z": obj["z"], "name": obj["name"]})
             return
         if obj["kind"] == "time_stone":
+            if obj.get("global"):
+                self.restore_world(now, obj)
+                return
             obj["ready"] = now + 10
             for enemy in self.objects:
                 if enemy["kind"] == "enemy" and enemy["city"] == obj["city"]:
@@ -905,6 +942,8 @@ class Game:
     def advance_arrows(self, dt, now):
         half = self.world["half"]
         for arrow_id, arrow in list(self.arrows.items()):
+            if arrow_id not in self.arrows:
+                continue
             owner = self.players.get(arrow["owner"])
             if owner is None or arrow["age"] >= 5:
                 del self.arrows[arrow_id]
@@ -981,6 +1020,8 @@ class Game:
                 self.emit({"k": "armor_break", "id": victim.id})
         victim.hp -= amount
         victim.last_damage_at = now
+        if amount > 0:
+            victim.hurt_until = now + .45
         attacker.damage += int(amount)
         fx, fz = math.sin(attacker.yaw), math.cos(attacker.yaw)
         if mace:
@@ -1001,7 +1042,7 @@ class Game:
             if not collides(victim.x, nz, self.blocks, feet=victim.jump):
                 victim.z = nz
         self.emit({"k": "hit", "id": victim.id, "by": attacker.id,
-                   "dmg": amount, "absorbed": absorbed, "hp": max(0, round(victim.hp))})
+                   "x": victim.x, "y": victim.jump + 1.1, "z": victim.z, "dmg": amount, "absorbed": absorbed, "hp": max(0, round(victim.hp))})
         if victim.hp <= 0:
             self.kill(attacker, victim, now)
 
@@ -1229,7 +1270,7 @@ class Game:
                 "id": p.id, "name": p.name, "team": p.team,
                 "x": round(p.x, 3), "z": round(p.z, 3),
                 "yaw": round(p.yaw, 3), "hp": round(p.hp, 1),
-                "alive": p.alive, "armor": dict(p.armor), "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
+                "alive": p.alive, "hurt": now < p.hurt_until, "armor": dict(p.armor), "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
                 "food": p.food, "poop": p.poop, "weapons": p.weapons, "syllable": p.syllable, "syllables": p.syllables,
                 "forge_near": self.forge_near(p),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
@@ -1257,7 +1298,7 @@ class Game:
             "team_score": self.team_score,
             "craft_modes": self.craft_modes,
             "campaign_cleared": sorted(self.cleared_cities),
-            "objects": [{**obj, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
+            "objects": [{**{key: value for key, value in obj.items() if not key.startswith("_")}, "locked": bool(obj.get("city") and not self.city_unlocked(obj.get("destination", obj["city"]))), "hurt": now < obj.get("hurt_until", 0), "attacking": now - obj.get("last_attack", -10) < .3, "cooldown": max(0, math.ceil((obj["ready"] or 0) - now))} for obj in self.objects],
             "events": events,
         }
 

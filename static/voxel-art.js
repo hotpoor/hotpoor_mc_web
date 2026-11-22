@@ -1,4 +1,4 @@
-import { attachWeaponModel } from './weapon-models.js?v=46';
+import { attachWeaponModel } from './weapon-models.js?v=51';
 import * as THREE from './vendor/three.module.js';
 
 export function voxelMaterial(kind) {

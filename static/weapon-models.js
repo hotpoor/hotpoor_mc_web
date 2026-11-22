@@ -4,18 +4,18 @@ import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 const loader = new GLTFLoader();
 const models = new Map();
 const settings = {
-  sword: { height: 1.08, grip: .20 },
+  sword: { height: 1.08, grip: .29 },
   bow: { height: 1.04, grip: .50 },
   beam: { height: .40, grip: .50 },
   rocket: { height: .95, grip: .35, horizontal: true },
   gun: { height: .78, grip: .34, horizontal: true },
-  axe: { height: 1.02, grip: .22 },
-  mace: { height: 1.08, grip: .22 },
-  hammer: { height: 1.10, grip: .24 },
-  dual: { height: 1.08, grip: .20 },
-  spear: { height: 1.65, grip: .35 },
-  blade: { height: 1.65, grip: .35 },
-  halberd: { height: 1.65, grip: .35 },
+  axe: { height: 1.02, grip: .30 },
+  mace: { height: 1.08, grip: .30 },
+  hammer: { height: 1.10, grip: .32 },
+  dual: { height: 1.08, grip: .29 },
+  spear: { height: 1.65, grip: .42 },
+  blade: { height: 1.65, grip: .42 },
+  halberd: { height: 1.65, grip: .42 },
 };
 
 function loadModel(kind) {
@@ -71,7 +71,7 @@ export function attachWeaponModel(group, kind, overlay = false) {
     const normalized = new THREE.Group();
     model.position.sub(center);
     if (config.horizontal) {
-      model.position.y += dimensions.y * .22;
+      model.position.y += dimensions.y * .10;
       model.position.z += dimensions.z * (.5 - config.grip);
     } else {
       model.position.y += dimensions.y * (.5 - config.grip);

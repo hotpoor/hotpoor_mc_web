@@ -40,7 +40,7 @@ def main():
         assert dog['owner'] == p.name  # Other players cannot steal a companion.
         # A trusted dog tolerates one hit but repeated abuse triggers betrayal.
         g.damage_object(p, dog, 1, now + 8)
-        assert dog['owner'] == p.name and dog['favor'][p.name] == 65
+        assert dog['owner'] == p.name and dog['favor'][p.name] == 100  # Friendly pet damage is blocked.
         # Hungry and full dogs react differently to poop; neither grants positive trust.
         p.poop = 4
         dog['favor'][p.name] = 0; dog['owner'] = ''; dog['hunger'] = 10
@@ -86,7 +86,8 @@ def main():
         g.advance_animals(.05, now + 25)
         assert p.hp == 100
         p.jump = 0
-        p.x, p.z = -24, 4.5
+        wolf['x'], wolf['z'] = -24, -1
+        p.x, p.z = -24, 1.5
         before = wolf['hp']
         g.shoot(p, math.pi, 0, now + 26, 1)
         for i in range(8): g.advance_arrows(.025, now + 26 + i * .025)

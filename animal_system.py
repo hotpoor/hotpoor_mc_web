@@ -1,5 +1,6 @@
 """Server-authoritative wildlife, food, individual dog trust and companions."""
 import json
+import heapq
 import math
 import random
 import time
@@ -97,7 +98,8 @@ def hurt(game, animal, amount, now, player=None):
             game.emit({'k': 'story', 'id': player.id, 'text': '村犬好感降至 ' + str(round(favor)) + '，正在反击你！'})
         save(game)
     animal['hp'] = max(0, animal['hp'] - amount)
-    animal['hurt_until'] = now + .18
+    animal['hurt_until'] = now + .45
+    game.emit({'k': 'object_hit', 'id': animal['id'], 'x': animal['x'], 'y': .9, 'z': animal['z'], 'dmg': amount, 'hp': animal['hp']})
     if animal['hp']:
         return
     animal['ready'] = now + 60
@@ -114,7 +116,73 @@ def hurt(game, animal, amount, now, player=None):
                'x': animal['x'], 'z': animal['z']})
 
 
+def navigation_grid(game):
+    key = len(game.blocks), tuple(sorted(game.cleared_cities))
+    if getattr(game, 'animal_nav_key', None) == key:
+        return game.animal_nav_blocked
+    blocked = set()
+    for b in game.blocks:
+        for x in range(math.floor(b['x'] - .8), math.ceil(b['x'] + .8) + 1):
+            for z in range(math.floor(b['z'] - .8), math.ceil(b['z'] + .8) + 1):
+                if abs(x - b['x']) < .8 and abs(z - b['z']) < .8:
+                    blocked.add((x, z))
+    for m in game.world['moats']:
+        for x in range(math.ceil(m['x0'] - .3), math.floor(m['x1'] + .3) + 1):
+            for z in range(math.ceil(m['z0'] - .3), math.floor(m['z1'] + .3) + 1):
+                blocked.add((x, z))
+    for c in game.world['cities']:
+        if not game.city_unlocked(c['id']):
+            blocked.update((x, z) for x in range(c['x'] - 17, c['x'] + 18) for z in range(c['z'] - 17, c['z'] + 18))
+    game.animal_nav_key, game.animal_nav_blocked = key, blocked
+    return blocked
+
+
+def steer(game, animal, tx, tz):
+    blocked = navigation_grid(game)
+    start, goal = (round(animal['x']), round(animal['z'])), (round(tx), round(tz))
+    steps = max(1, math.ceil(math.hypot(tx - animal['x'], tz - animal['z']) * 2))
+    if all((round(animal['x'] + (tx - animal['x']) * i / steps), round(animal['z'] + (tz - animal['z']) * i / steps)) not in blocked for i in range(1, steps + 1)):
+        animal.pop('_path', None)
+        return tx, tz
+    now = game.last_tick
+    if now >= animal.get('_path_ready', 0) and (animal.get('_path_goal') != goal or not animal.get('_path')):
+        animal['_path_ready'], animal['_path_goal'] = now + .7, goal
+        if goal in blocked:
+            nearby = [(goal[0] + x, goal[1] + z) for x in range(-2, 3) for z in range(-2, 3) if (goal[0] + x, goal[1] + z) not in blocked]
+            goal = min(nearby, key=lambda n: math.hypot(n[0] - tx, n[1] - tz), default=goal)
+        animal['_path'] = []
+        frontier, costs, parent = [(0, start)], {start: 0}, {}
+        limit = game.world['half'] - 1.3
+        for _ in range(3000):
+            if not frontier:
+                break
+            _, node = heapq.heappop(frontier)
+            if node == goal:
+                path = []
+                while node != start:
+                    path.append(node); node = parent[node]
+                animal['_path'] = path[::-1]
+                break
+            for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nxt = node[0] + dx, node[1] + dz
+                if nxt in blocked or abs(nxt[0]) > limit or abs(nxt[1]) > limit:
+                    continue
+                cost = costs[node] + 1
+                if cost < costs.get(nxt, math.inf):
+                    costs[nxt], parent[nxt] = cost, node
+                    heapq.heappush(frontier, (cost + abs(nxt[0] - goal[0]) + abs(nxt[1] - goal[1]), nxt))
+    path = animal.get('_path', [])
+    while path and math.hypot(path[0][0] - animal['x'], path[0][1] - animal['z']) < .25:
+        path.pop(0)
+    return path[0] if path else (tx, tz)
+
+
 def move(game, animal, tx, tz, speed, dt, stop=.15):
+    distance = math.hypot(tx - animal['x'], tz - animal['z'])
+    if distance > stop:
+        sx, sz = steer(game, animal, tx, tz)
+        if (sx, sz) != (tx, tz):
+            tx, tz, stop = sx, sz, .05
     dx, dz = tx - animal['x'], tz - animal['z']
     length = math.hypot(dx, dz)
     animal['moving'] = length > stop
@@ -177,10 +245,11 @@ def advance(game, dt, now):
             victim = next((p for p in alive if p.name == animal['angry_at']
                            and math.hypot(p.x - animal['x'], p.z - animal['z']) < 10), None)
         elif not dog:
-            candidates = [p for p in alive if math.hypot(p.x - animal['home_x'], p.z - animal['home_z']) < 16]
-            victim = min(candidates, key=lambda p: math.hypot(p.x - animal['x'], p.z - animal['z']), default=None)
-            if victim and math.hypot(victim.x - animal['x'], victim.z - animal['z']) > (10 if animal['animal'] == 'tiger' else 8):
-                victim = None
+            victim = next((p for p in alive if p.name == animal.get('prey') and math.hypot(p.x - animal['x'], p.z - animal['z']) < 35), None)
+            if not victim:
+                candidates = [p for p in alive if math.hypot(p.x - animal['x'], p.z - animal['z']) < (10 if animal['animal'] == 'tiger' else 8)]
+                victim = min(candidates, key=lambda p: math.hypot(p.x - animal['x'], p.z - animal['z']), default=None)
+            animal['prey'] = victim.name if victim else ''
         target = None
         if dog and owner and not victim:
             if math.hypot(owner.x - animal['x'], owner.z - animal['z']) > 14:
@@ -191,20 +260,30 @@ def advance(game, dt, now):
                        and math.hypot(o['x'] - owner.x, o['z'] - owner.z) < 7
                        and not game.blocked(animal['x'], animal['z'], o['x'], o['z'])]
             target = min(targets, key=lambda o: math.hypot(o['x'] - animal['x'], o['z'] - animal['z']), default=None)
+        pack = sorted((o for o in animals if dog and o['animal'] == 'dog' and o['owner'] == animal['owner']), key=lambda o: o['id'])
+        slot = pack.index(animal) if dog and owner else 0
+        side = -1 if slot % 2 == 0 else 1
         if victim:
             tx, tz = victim.x, victim.z
         elif target:
             tx, tz = target['x'], target['z']
         elif owner:
-            tx, tz = owner.x, owner.z
+            offset = side * (1.5 + (slot // 2) * .9)
+            tx = owner.x - math.sin(owner.yaw) * 1.8 + math.cos(owner.yaw) * offset
+            tz = owner.z - math.cos(owner.yaw) * 1.8 - math.sin(owner.yaw) * offset
         elif dog and now < animal.get('feeding_until', 0):
             tx, tz = animal['x'], animal['z']
         else:
             phase = now * .3 + animal['home_x']
             tx, tz = animal['home_x'] + math.sin(phase) * 1.5, animal['home_z'] + math.cos(phase) * 1.5
         combat = victim is not None or target is not None
-        moved = move(game, animal, tx, tz, 3.5 if combat or owner else .75, dt,
-                     1.15 if combat else 1.7 if owner else .15)
+        mx, mz = tx, tz
+        if target and owner:
+            dx, dz = target['x'] - owner.x, target['z'] - owner.z
+            length = math.hypot(dx, dz) or 1
+            mx, mz = tx - dz / length * side * 1.1, tz + dx / length * side * 1.1
+        moved = move(game, animal, mx, mz, 3.5 if combat or owner else .75, dt,
+                     .12 if target else 1.15 if victim else .3 if owner else .15)
         if owner and not combat:
             animal['stuck'] = 0 if moved else animal.get('stuck', 0) + dt
             if animal['stuck'] > 4 and math.hypot(owner.x - animal['x'], owner.z - animal['z']) > 5:
@@ -225,6 +304,24 @@ def advance(game, dt, now):
             if pet:
                 animal['last_attack'] = now
                 hurt(game, pet, 24 if animal['animal'] == 'tiger' else 10, now)
+    # Resolve dog/dog overlap with collision-safe, symmetric pushes.
+    dogs = [o for o in animals if o['animal'] == 'dog' and o['hp'] > 0]
+    for _ in range(3):
+        for i, left in enumerate(dogs):
+            for j, right in enumerate(dogs[i + 1:]):
+                dx, dz = right['x'] - left['x'], right['z'] - left['z']
+                distance = math.hypot(dx, dz)
+                if distance >= 1.2:
+                    continue
+                if distance < .001:
+                    dx, dz, distance = math.cos(i + j + 1), math.sin(i + j + 1), 1
+                    push = .3
+                else:
+                    push = min(.2, (1.2 - distance) / 2)
+                for obj, sign in ((left, -1), (right, 1)):
+                    x, z = obj['x'] + sign * dx / distance * push, obj['z'] + sign * dz / distance * push
+                    if not game.locked_city_at(x, z) and not collides(x, z, game.blocks, radius=.3):
+                        obj['x'], obj['z'] = x, z
     if now >= game.next_animal_item:
         spawn_item(game, random.choice(game.world['villages']), random.choice(('food_pickup', 'poop_pickup')), now)
         game.next_animal_item = now + random.uniform(15, 25)
