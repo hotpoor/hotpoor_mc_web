@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=56">
+<link rel="stylesheet" href="./style.css?v=57">
 </head>
 <body>
 
@@ -64,6 +64,7 @@
   <div id="hud-status" class="hud-status"></div>
   <div id="open-conquest-status" class="hud-status hidden"></div>
   <button id="world-map-btn" class="view-btn hidden">天下地图 · M</button>
+  <button id="world-restart-btn" class="view-btn hidden">重新开始大世界</button>
   <button id="mode-switch-btn" class="view-btn">切换游戏模式</button>
   <button id="skin-toggle" class="view-btn" aria-controls="character-panel" aria-expanded="false">人物设置 · 阵营 / 皮肤</button>
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
@@ -159,6 +160,11 @@
 <div id="team-transfer-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="team-transfer-title"><div class="panel transfer-card"><h3 id="team-transfer-title">选择队友 · C</h3><p>引导 3 秒后抵达队友附近，冷却 30 秒。移动、受击或攻击会打断。</p><div id="team-transfer-targets"></div><button id="team-transfer-close" class="view-btn">取消 · Esc</button></div></div>
 <div id="world-map-panel" class="world-map-modal hidden" role="dialog" aria-modal="true" aria-labelledby="world-map-title"><div class="panel world-map-card">
   <div class="world-map-head"><div><h2 id="world-map-title">天下图 · 群雄割据</h2><p id="world-map-progress"></p></div><button id="world-map-close" class="view-btn">返回战场 · M / Esc</button></div>
+  <div id="world-restart-confirm" class="hidden" role="group" aria-label="确认重新开始大世界">
+    <h3>重新开始当前大世界？</h3><p>这会影响当前房间所有玩家：24座城市恢复原势力，武将、小兵招募和驯服关系清空，敌人、农田、水晶及补给重置。所有玩家回到己方大营，以初始装备开始新一局。</p>
+    <p>当前阵营、皮肤和累计战绩保留。十章征战模式不受影响。</p>
+    <div class="character-teams"><button id="world-restart-cancel" class="view-btn">取消，继续当前进度</button><button id="world-restart-accept" class="view-btn">确认重新开始</button></div>
+  </div><div id="world-restart-status" role="status"></div>
   <div class="world-map-grid"><div><canvas id="world-map-canvas" width="720" height="520" aria-label="中国城池地图"></canvas><div id="world-map-city-info"></div><button id="world-march-btn" class="view-btn">选择一座城池</button><button id="world-base-btn" class="view-btn">返回己方大营</button></div><div id="world-map-cities"></div></div>
 </div></div>
 <div id="kill-banner"></div>
@@ -219,6 +225,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=56"></script>
+<script type="module" src="./main.js?v=57"></script>
 </body>
 </html>

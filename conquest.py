@@ -55,6 +55,7 @@ class OpenWorldGame(Game):
             if self.city_owners[city['id']] not in valid_holders:
                 self.city_owners[city['id']] = city['faction']
         self.general_owners = saved.get('generals', {})
+        self.generation = saved.get('generation', 0)
         self.objects = []
         self._build_objects()
         animal_system.initialize(self)
@@ -150,7 +151,7 @@ class OpenWorldGame(Game):
 
     def _save_conquest(self):
         self.db.set_setting('conquest_v1', json.dumps(
-            dict(owners=self.city_owners,generals=self.general_owners),ensure_ascii=False))
+            dict(owners=self.city_owners,generals=self.general_owners,generation=self.generation),ensure_ascii=False))
 
     def _sync_city_objects(self):
         by_id={o['id']:o for o in self.objects}
@@ -179,11 +180,15 @@ class OpenWorldGame(Game):
         p=self.players.get(self.sockets.get(ws))
         if not p:
             return
+        self.starter_equipment(p)
+        self.emit(dict(k='story',id=p.id,text='群雄割据：按 M 查看中国城池，任意选城出征。击败守军，进入府衙按 E 占领，再招募武将。'))
+
+    @staticmethod
+    def starter_equipment(p):
         p.weapons={'sword':50,'bow':50,'axe':30}
         p.weapon='sword'
         p.food=5
         p.armor={**ARMOR_TYPES['iron'],'kind':'iron','durability':80}
-        self.emit(dict(k='story',id=p.id,text='群雄割据：按 M 查看中国城池，任意选城出征。击败守军，进入府衙按 E 占领，再招募武将。'))
 
     def healing_rate(self,x,z,team):
         crystal=next((o for o in self.objects if o['kind']=='crystal' and o['team']==team),None)
@@ -281,6 +286,13 @@ class OpenWorldGame(Game):
             data=json.loads(msg)
         except (ValueError,TypeError):
             return super().handle(ws,msg)
+        if isinstance(data,dict) and data.get('t')=='open_restart':
+            p=self.players.get(self.sockets.get(ws))
+            if p and data.get('confirmed') is True and type(data.get('generation')) is int and data['generation']==self.generation:
+                self.restart_world(p,time.monotonic())
+            elif p:
+                self.send(ws,dict(t='open_restart_result',ok=False,message='世界状态已变化，请重新打开确认后再开始。'))
+            return
         if not isinstance(data,dict) or data.get('t')!='open_travel':
             return super().handle(ws,msg)
         p=self.players.get(self.sockets.get(ws))
@@ -292,6 +304,38 @@ class OpenWorldGame(Game):
         now=time.monotonic()
         p.mx=p.mz=0.0;p.draw_started=None;p.transfer_target='';p.recall_until=now+3
         self._marches[p.id]=dict(city=destination,start=(p.x,p.z))
+
+    def restart_world(self,initiator,now):
+        self.city_owners={city['id']:city['faction'] for city in self.world['cities']}
+        self.general_owners={}
+        self.generation+=1
+        self.cleared_cities.clear()
+        self._marches.clear()
+        self.arrows.clear()
+        self.events=[]
+        self.team_score={'red':0,'blue':0}
+        # Only this room's namespaced campaign data is reset.
+        self.db.set_setting('dog_companions_v1','{}')
+        self.db.set_setting('militia_farms_v1','{}')
+        self.objects=[]
+        self._build_objects()
+        animal_system.initialize(self)
+        farm_system.initialize(self)
+        self._sync_city_objects()
+        self._save_conquest()
+        for p in self.players.values():
+            fresh=Player(p.id,p.name,p.team,p.ws,*self.world['teams'][p.team]['spawn'],
+                         skin=p.skin,score=p.score,kills=p.kills,deaths=p.deaths,damage=p.damage,
+                         games=p.games,joined_at=p.joined_at,last_input=now,invuln_until=now+1.5,
+                         next_settings_attempt=p.next_settings_attempt,next_team_change=p.next_team_change)
+            p.__dict__.update(fresh.__dict__)
+            self.starter_equipment(p)
+            self.db.upsert_player(p)
+        for stream in self.object_streams.values():
+            stream.update(objects={},initialized=False,events=[])
+        self.db.add_history('open_restart',initiator.name,team=initiator.team,detail='重新开始三国开放世界')
+        self.emit(dict(k='open_restarted',by=initiator.name,generation=self.generation,
+                       text=initiator.name+'重新开始了大世界：城市、守军和招募关系已恢复初始状态。'))
 
     def _finish_marches(self,now):
         for pid,march in list(self._marches.items()):
@@ -389,6 +433,6 @@ class OpenWorldGame(Game):
                                               recruited=o['kind']=='villager',hp=o['hp'])
                                          for o in generals_by_city[city['id']]]))
         owned={team:sum(holder==team for holder in self.city_owners.values()) for team in ('red','blue')}
-        state['conquest']=dict(owners=dict(self.city_owners),cities=cities,total=len(cities),owned=owned,
+        state['conquest']=dict(generation=self.generation,owners=dict(self.city_owners),cities=cities,total=len(cities),owned=owned,
                                factions=self.world['factions'],victory=next((team for team,count in owned.items() if count==len(cities)),None))
         return state

@@ -351,3 +351,8 @@ body.first-person #view { cursor: crosshair; }
 .character-teams {display:flex;gap:12px;}.character-teams button {flex:1;min-height:44px;}
 .character-teams [aria-pressed="true"] {border-color:var(--gold);background:#594e30;}
 #character-status {min-height:22px;font-size:13px;color:var(--gold);margin-top:10px;}
+
+#world-restart-confirm {padding:16px;margin:12px 0;border:1px solid #d38471;background:#3f2824;}
+#world-restart-confirm p {font-size:13px;line-height:1.6;color:#f6dfcf;}
+#world-restart-accept {border-color:#dc7865;color:#ffd3c6;}
+#world-restart-status {color:#ffd3c6;font-size:13px;line-height:1.6;}

@@ -1,4 +1,4 @@
-import { installOpenWorldUI } from './open-world-ui.js?v=56';
+import { installOpenWorldUI } from './open-world-ui.js?v=57';
 import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=49';
 
 // mc-web client: networking, input, prediction, HUD and panels.
@@ -73,6 +73,7 @@ function connect() {
     let msg;
     try { msg = JSON.parse(e.data); } catch (_) { return; }
     if (msg.t === 'welcome') onWelcome(msg);
+    else if(msg.t==='open_restart_result')openUI.restartResult(msg.message);
     else if(msg.t==='team_result')$('character-status').textContent=msg.message;
     else if (msg.t === 'state') applyState(msg);
     else if (msg.t === 'settings_result') {
@@ -189,6 +190,8 @@ async function initRenderer() {
 
 // ---------------------------------------------------------------- state
 function applyState(s) {
+  const restarted=(s.events||[]).some(ev=>ev.k==='open_restarted');
+  if(restarted){G.keys.clear();G.attacking=false;cancelDraw();}
   const seen = new Set();
   const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer', 'open_travel', 'team_changed'].includes(ev.k)).map(ev => ev.id));
   for (const p of s.players) {
@@ -199,7 +202,7 @@ function applyState(s) {
             lastX: p.x, lastZ: p.z, jump: p.jump || 0, targetJump: p.jump || 0, moving: 0 };
       G.players.set(p.id, o);
     }
-    const justRespawned = !o.alive && p.alive;
+    const justRespawned = restarted || !o.alive && p.alive;
     if (justRespawned || recalled.has(p.id)) { o.rx = p.x; o.rz = p.z; }
     if (p.id === G.id) {
       const dx = p.x - o.px, dz = p.z - o.pz;

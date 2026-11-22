@@ -1,6 +1,6 @@
 // China strategic map, room selector and faction conquest HUD.
 export function installOpenWorldUI({G,$,send,esc,banner,log,cancelDraw}) {
-  let selected='',listKey='',mapPoints=[];
+  let selected='',listKey='',mapPoints=[],restartGeneration=null;
   function chooseMode(mode){
     G.mode=mode==='open'?'open':'campaign';localStorage.setItem('mc.mode',G.mode);
     for(const b of document.querySelectorAll('.mode-choice'))b.classList.toggle('active',b.dataset.mode===G.mode);
@@ -50,15 +50,19 @@ export function installOpenWorldUI({G,$,send,esc,banner,log,cancelDraw}) {
     renderSelected();drawMap($('world-map-canvas'));
   }
   function openMap(){if(G.mode!=='open'||!G.joined)return;G.keys.clear();G.attacking=false;cancelDraw();if(document.pointerLockElement)document.exitPointerLock();if(!selected&&G.me)selected=G.world.cities.reduce((a,b)=>Math.hypot(a.x-G.me.rx,a.z-G.me.rz)<Math.hypot(b.x-G.me.rx,b.z-G.me.rz)?a:b).id;$('world-map-panel').classList.remove('hidden');render();}
-  function closeMap(){$('world-map-panel').classList.add('hidden');}
+  function closeMap(){$('world-restart-confirm').classList.add('hidden');restartGeneration=null;$('world-map-panel').classList.add('hidden');}
+  $('world-restart-btn').onclick=()=>{openMap();restartGeneration=G.conquest?.generation;$('world-restart-confirm').classList.remove('hidden');$('world-restart-status').textContent='';$('world-restart-accept').disabled=false;$('world-restart-confirm').scrollIntoView({block:'nearest'});$('world-restart-cancel').focus();};
+  $('world-restart-cancel').onclick=()=>{$('world-restart-confirm').classList.add('hidden');restartGeneration=null;};
+  $('world-restart-accept').onclick=()=>{if(restartGeneration==null)return;$('world-restart-accept').disabled=true;send({t:'open_restart',confirmed:true,generation:restartGeneration});$('world-restart-status').textContent='正在重新开始大世界…';};
   $('world-map-btn').onclick=openMap;$('world-map-close').onclick=closeMap;
   $('world-map-canvas').onclick=event=>{const cv=$('world-map-canvas'),rect=cv.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width*cv.width,z=(event.clientY-rect.top)/rect.height*cv.height;const pick=mapPoints.reduce((best,c)=>Math.hypot(c.x-x,c.z-z)<Math.hypot(best.x-x,best.z-z)?c:best,{x:1e9,z:1e9});if(pick.id&&Math.hypot(pick.x-x,pick.z-z)<24){selected=pick.id;render();}};
   function march(city){if(!G.me?.alive||G.me.recall||G.me.transferCd)return;G.keys.clear();G.attacking=false;cancelDraw();send({t:'open_travel',city});closeMap();}
   $('world-march-btn').onclick=()=>march(selected);$('world-base-btn').onclick=()=>march('base');
   return {openMap,closeMap,isOpen:()=>$('world-map-panel')&&!$('world-map-panel').classList.contains('hidden'),
-    onWelcome(){chooseMode(G.world.mode==='open'?'open':'campaign');const open=G.mode==='open';$('campaign-journal').classList.toggle('hidden',open);$('open-conquest-status').classList.toggle('hidden',!open);$('world-map-btn').classList.toggle('hidden',!open);$('mode-switch-btn').textContent=open?'切换到十章征战':'切换到开放世界';document.querySelector('.brand-sub').textContent=open?'三国开放世界 · 群雄割据 · 红蓝 PK':'MINECRAFT WEB · 多人实时对抗';},
+    onWelcome(){chooseMode(G.world.mode==='open'?'open':'campaign');const open=G.mode==='open';$('campaign-journal').classList.toggle('hidden',open);$('open-conquest-status').classList.toggle('hidden',!open);$('world-map-btn').classList.toggle('hidden',!open);$('world-restart-btn').classList.toggle('hidden',!open);$('mode-switch-btn').textContent=open?'切换到十章征战':'切换到开放世界';document.querySelector('.brand-sub').textContent=open?'三国开放世界 · 群雄割据 · 红蓝 PK':'MINECRAFT WEB · 多人实时对抗';},
     applyState(state){if(G.mode!=='open')return;G.conquest=state.conquest;const c=G.conquest;if(!c)return;$('open-conquest-status').textContent='我方占领 '+c.owned[G.team]+'/'+c.total+' 城 · 武将跟随 · M 天下图';const near=G.world.cities.find(city=>G.me&&Math.hypot(city.x-G.me.rx,city.z-G.me.rz)<city.radius+16);if(near){const s=stateFor(near.id);$('campaign-status').textContent=near.name+' · '+ownerName(s?.owner||near.faction)+' · 剩余守军 '+s?.defenders;}else $('campaign-status').textContent='自由行军 · 到府衙占领城池 · M 选择城池';if(G.me?.openTravel)$('campaign-status').textContent='行军引导中 · '+G.me.recall.toFixed(1)+'秒';if(this.isOpen())render();},
+    restartResult(message){$('world-restart-status').textContent=message;$('world-restart-confirm').classList.add('hidden');restartGeneration=null;},
     drawMini:canvas=>drawMap(canvas,true),
-    handleEvent(event){if(['city_captured','city_cleared','conquest_victory'].includes(event.k)){banner(event.text);log(event.text,'kill');return true;}if(event.k==='general_recruited'){if(event.id===G.id){banner(event.text);log(event.text,'join');}return true;}if(event.k==='open_travel'){this.closeMap();G.renderer?.spawnSlam?.({x:event.x,y:0,z:event.z});if(event.id===G.id){banner('已抵达 '+event.name+'，自由行军攻城');if(G.me)G.renderer?.camTarget?.set(G.me.rx,0,G.me.rz);}return true;}return false;}
+    handleEvent(event){if(event.k==='open_restarted'){this.closeMap();listKey='';selected='';banner(event.text);log(event.text,'join');return true;}if(['city_captured','city_cleared','conquest_victory'].includes(event.k)){banner(event.text);log(event.text,'kill');return true;}if(event.k==='general_recruited'){if(event.id===G.id){banner(event.text);log(event.text,'join');}return true;}if(event.k==='open_travel'){this.closeMap();G.renderer?.spawnSlam?.({x:event.x,y:0,z:event.z});if(event.id===G.id){banner('已抵达 '+event.name+'，自由行军攻城');if(G.me)G.renderer?.camTarget?.set(G.me.rx,0,G.me.rz);}return true;}return false;}
   };
 }
