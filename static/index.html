@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=54">
+<link rel="stylesheet" href="./style.css?v=55">
 </head>
 <body>
 
@@ -62,6 +62,9 @@
   <details id="campaign-journal"><summary>三国征程 · 十章</summary><div id="campaign-chapters"></div></details>
   <div id="campaign-status" class="hud-status">第一城：往北前往黄巾起义城</div>
   <div id="hud-status" class="hud-status"></div>
+  <div id="open-conquest-status" class="hud-status hidden"></div>
+  <button id="world-map-btn" class="view-btn hidden">天下地图 · M</button>
+  <button id="mode-switch-btn" class="view-btn">切换游戏模式</button>
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
   <button id="monocular-btn" class="view-btn">单筒望远镜 · B</button>
   <div id="pet-inventory" class="hud-status"></div>
@@ -113,6 +116,7 @@
   <div id="tab-help" class="tab-body">
     <div class="help-title">怎么玩</div>
     <ul class="help-list">
+      <li>开放世界：登录时选择「三国开放世界」。按 M 查看中国城池地图、选择城外行军落点。自由攻城，击败守军后到府衙按 E 占领；己方属城可以招募降将。红蓝阵营可 PK 并争夺城池，章节模式进度独立保留。</li>
       <li>按 C 选择同阵营队友，引导 3 秒后传送到其附近安全位置，冷却 30 秒；移动、攻击、受伤会打断。队友离线或阵亡时取消。</li>
       <li>军屯种田：村镇空地有农田和闲居村民。靠近田地按 E 耕地、再按 E 播种，30 秒成熟后按 E 收获粮食。每轮好感 +40，80 好感后靠近对应村民按 E 招募为小兵，跟随助战，归属与好感会保存。</li>
       <li>双方老家水晶对面的「全图时光机」：击碎后恢复全图敌人、动物、水晶、采集点和固定补给；清理临时掉落、飞行弹药，收回携带水晶。已解锁章节和驯服关系保留，两台共用 10 秒恢复时间。</li>
@@ -145,6 +149,10 @@
 </div>
 
 <div id="team-transfer-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="team-transfer-title"><div class="panel transfer-card"><h3 id="team-transfer-title">选择队友 · C</h3><p>引导 3 秒后抵达队友附近，冷却 30 秒。移动、受击或攻击会打断。</p><div id="team-transfer-targets"></div><button id="team-transfer-close" class="view-btn">取消 · Esc</button></div></div>
+<div id="world-map-panel" class="world-map-modal hidden" role="dialog" aria-modal="true" aria-labelledby="world-map-title"><div class="panel world-map-card">
+  <div class="world-map-head"><div><h2 id="world-map-title">天下图 · 群雄割据</h2><p id="world-map-progress"></p></div><button id="world-map-close" class="view-btn">返回战场 · M / Esc</button></div>
+  <div class="world-map-grid"><div><canvas id="world-map-canvas" width="720" height="520" aria-label="中国城池地图"></canvas><div id="world-map-city-info"></div><button id="world-march-btn" class="view-btn">选择一座城池</button><button id="world-base-btn" class="view-btn">返回己方大营</button></div><div id="world-map-cities"></div></div>
+</div></div>
 <div id="kill-banner"></div>
 <div id="event-log"></div>
 
@@ -175,6 +183,11 @@
     <div class="login-cube"></div>
     <h1>方块战场</h1>
     <p class="login-sub">基于 Tornado + WebSocket 的多人体素对抗</p>
+    <label class="field-label">选择模式</label>
+    <div class="mode-picker" role="group" aria-label="选择游戏模式">
+      <button class="mode-choice" data-mode="campaign"><b>方块战场 · 十章征战</b><span>保留现有关卡、村镇与军屯玩法</span></button>
+      <button class="mode-choice" data-mode="open"><b>三国开放世界 · 群雄割据</b><span>中国地图 · 24 城池 · 自由攻城 · 武将跟随 · 红蓝 PK</span></button>
+    </div>
     <label class="field-label" for="name-input">你的名字</label>
     <input id="name-input" maxlength="14" placeholder="输入名字（用于保存积分）" autocomplete="off">
     <label class="field-label">选择阵营（选自动会平衡人数）</label>
@@ -198,6 +211,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=54"></script>
+<script type="module" src="./main.js?v=55"></script>
 </body>
 </html>

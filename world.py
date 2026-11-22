@@ -194,8 +194,10 @@ def _generate_blocks():
 
 class BlockList(list):
     """JSON-compatible static blocks with a local collision broad phase."""
-    def __init__(self, values=()):
+    def __init__(self, values=(), half=HALF, moats=None):
         super().__init__(values)
+        self.half = half
+        self.moats = MOATS if moats is None else moats
         self._buckets = None
 
     def append(self, value):
@@ -240,10 +242,10 @@ class BlockList(list):
 
 def collides(x, z, blocks, radius=0.36, feet=0):
     """Server-side wall collision. Blocks are 1x1 AABBs centred on integer x/z."""
-    edge = HALF - 1.0 - radius
+    edge = getattr(blocks, "half", HALF) - 1.0 - radius
     if x < -edge or x > edge or z < -edge or z > edge:
         return True
-    if any(m["x0"] - radius < x < m["x1"] + radius and m["z0"] - radius < z < m["z1"] + radius for m in MOATS):
+    if any(m["x0"] - radius < x < m["x1"] + radius and m["z0"] - radius < z < m["z1"] + radius for m in getattr(blocks, "moats", MOATS)):
         return True
     limit = 0.5 + radius
     for b in (blocks.nearby(x,z,limit) if isinstance(blocks,BlockList) else blocks):

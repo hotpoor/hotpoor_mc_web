@@ -1,6 +1,7 @@
 // Three.js voxel renderer. Same interface as render2d.js so main.js can
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
+import { buildOpenWorldArt } from './open-world-art.js?v=55';
 
 import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=54';
 
@@ -102,8 +103,8 @@ export class Renderer3D {
     for (const pool of world.pools) this.buildPool(pool);
     this.buildBlocks(world.blocks);
     this.cityBarriers = new Map();
-    this.buildCities();
-    this.buildRoadside();
+    if(world.mode==='open') { buildOpenWorldArt(this,labelSprite,box,THREE); this.scene.fog.near=70; this.scene.fog.far=180; }
+    else { this.buildCities(); this.buildRoadside(); }
     this.resize();
     const owner=this;
     window.__THREE_GAME_DIAGNOSTICS__={get render(){return {...owner.renderer.info.render}},get memory(){return {...owner.renderer.info.memory}},get dpr(){return owner.renderer.getPixelRatio()},get objectiveMeshes(){return owner.objectives.size}};
@@ -487,7 +488,13 @@ export class Renderer3D {
     return geometry;
   }
 
-  buildBlocks(blocks) {
+  buildBlocks(blocks, chunked = false) {
+    if(this.world.mode==='open' && !chunked){
+      const chunks=new Map();
+      for(const b of blocks){const key=Math.floor(b.x/96)+','+Math.floor(b.z/96);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key).push(b);}
+      for(const chunk of chunks.values())this.buildBlocks(chunk,true);
+      return;
+    }
     const dummy = new THREE.Object3D();
     const groups = { stone: [], brick: [], tree: [], bark: [] };
     for (const b of blocks) (groups[b.type] || groups.stone).push(b);
@@ -617,6 +624,7 @@ export class Renderer3D {
   }
 
   sync(players, me, dt) {
+    if(me)for(const [id,group] of this.openCityGroups||[]){const city=this.world.cities.find(c=>c.id===id);group.visible=Math.hypot(city.x-me.rx,city.z-me.rz)<(this.monocular?450:220);}
     this.time += dt;
     this.syncRecall(players);
     this.myId = me ? me.id : null;
@@ -821,13 +829,15 @@ export class Renderer3D {
     }
     for (const obj of objects) {
       const distance=Math.hypot(obj.x-this.camTarget.x,obj.z-this.camTarget.z);
-      const range=this.monocular?145:54;
-      if(distance>range){const old=this.objectives.get(obj.id);if(old){if(distance>(this.monocular?180:100))this.disposeObjective(obj.id,old);else old.visible=false;}continue;}
+      const range=this.world.mode==='open'?(this.monocular?350:90):(this.monocular?145:54);
+      if(distance>range){const old=this.objectives.get(obj.id);if(old){if(distance>(this.world.mode==='open'?(this.monocular?400:180):(this.monocular?180:100)))this.disposeObjective(obj.id,old);else old.visible=false;}continue;}
       if (obj.kind === 'enemy' && this.cityBarriers?.has(obj.city)) this.cityBarriers.get(obj.city).visible = obj.locked;
       let mesh = this.objectives.get(obj.id);
+      if(mesh && mesh.userData.objectKind!==obj.kind){this.disposeObjective(obj.id,mesh);mesh=null;}
       if (!mesh) {
         const crystal = obj.kind === 'crystal';
         mesh = new THREE.Group();
+        mesh.userData.objectKind=obj.kind;
         if (crystal || ['dummy', 'enemy', 'time_stone'].includes(obj.kind)) {
           if (crystal) {
             const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.67),
@@ -912,9 +922,20 @@ export class Renderer3D {
           crops.add(heads);mesh.add(crops);mesh.userData.farm={soil,furrows,crops,heads};
           const label=labelSprite('军屯田 · E', '#e5da9c',448,100,38);label.position.y=1.45;label.scale.set(3,.65,1);label.material.depthTest=true;mesh.add(label);
           mesh.userData.farmLabel=label;
+        } else if (obj.kind === 'city_banner' || obj.kind === 'general_recruit') {
+          mesh.add(box(1.4,.2,1.4,0x77766c,.1));
+          if(obj.kind==='city_banner'){
+            mesh.add(box(.12,3,.12,0x76502e,1.6));
+            const flag=box(1.1,.8,.06,0xd5b65e,2.6);flag.position.x=.55;mesh.add(flag);mesh.userData.cityFlag=flag;
+          } else {
+            mesh.add(box(.6,.9,.4,0x6f8154,.95),box(.52,.52,.52,0xcba286,1.65));
+            const weapon=makeWeapon(obj.weapon||'sword',false,false);weapon.position.set(.6,.7,0);weapon.userData.loadModel?.();mesh.add(weapon);
+          }
+          const label=labelSprite(obj.name+' · E '+(obj.kind==='city_banner'?'占领':'招募'),'#ffe4a0',640,110,35);label.position.y=3.4;label.scale.set(5,.85,1);label.material.depthTest=true;mesh.add(label);
         } else if (obj.kind === 'villager') {
           const body=new THREE.Group();
           body.add(box(.6,.75,.4,0x8e724a,1.0),box(.52,.52,.52,0xd0a481,1.65));
+          if(obj.is_general){const skin=this.skins[obj.skin]||this.skins.ranger;body.children[1].material=skin.head.map(map=>new THREE.MeshLambertMaterial({map}));body.children[0].material=new THREE.MeshLambertMaterial({map:skin.top});}
           const nose=box(.14,.17,.18,0xbd8e6b,1.58);nose.position.z=.34;body.add(nose);
           for(const x of [-.13,.13]){const eye=box(.065,.06,.02,0x252628,1.73);eye.position.set(x,1.73,.27);body.add(eye);}
           const hat=new THREE.Group();hat.add(box(.8,.09,.8,0xd2b66d,1.96),box(.55,.15,.55,0xb59552,2.05));body.add(hat);
@@ -925,7 +946,7 @@ export class Renderer3D {
             const arm=new THREE.Group();arm.position.set(side*.43,1.35,0);arm.add(box(.22,.65,.24,0x9c8058,-.29));body.add(arm);arms.push(arm);
           }
           const hoe=new THREE.Group();hoe.add(box(.07,.85,.07,0x634a2f,-.45));const blade=box(.35,.09,.2,0x848b8a,-.02);hoe.add(blade);hoe.position.set(0,-.4,.25);arms[1].add(hoe);
-          const sword=makeWeapon('sword',false,false);sword.position.set(0,-.55,.15);arms[1].add(sword);
+          const sword=makeWeapon(obj.weapon||'sword',false,false);sword.position.set(0,-.55,.15);arms[1].add(sword);
           mesh.add(body);mesh.userData.villager={body,hat,armor,helmet,legs,arms,hoe,sword};
           const cv=document.createElement('canvas');cv.width=640;cv.height=120;const map=new THREE.CanvasTexture(cv);map.colorSpace=THREE.SRGBColorSpace;
           const status=new THREE.Sprite(new THREE.SpriteMaterial({map,depthTest:true,depthWrite:false}));status.position.y=2.6;status.scale.set(4.2,.8,1);mesh.add(status);mesh.userData.villagerStatus={cv,map,key:''};
@@ -1050,6 +1071,7 @@ export class Renderer3D {
       this.applyHitFlash(mesh, !!obj.hurt && Math.floor(this.time * 12) % 2 === 0);
       mesh.position.set(obj.x, obj.y || 0, obj.z);
       mesh.traverse(part=>{if(part.isSprite)part.visible=distance<(this.monocular?145:26)});
+      if(mesh.userData.cityFlag){const color=this.world.teams[obj.owner]?.color||this.world.factions?.[obj.owner]?.color||'#d5b65e';mesh.userData.cityFlag.material.color.set(color);for(const f of this.openCityFlags?.get(obj.city)||[])f.material.color.set(color);}
       if (obj.kind === 'chapter_gate') {
         mesh.children[0].rotation.z = this.time * .6;
         mesh.children[0].material.color.setHex(obj.locked ? 0x666677 : 0x65e8ef);
@@ -1067,9 +1089,9 @@ export class Renderer3D {
       if(mesh.userData.villager){
         const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;if(soldier)v.sword.userData.loadModel?.();
         v.legs.forEach((leg,i)=>leg.rotation.x=obj.moving?Math.sin(this.time*7+i*Math.PI)*.4:0);v.arms[1].rotation.x=obj.attacking?-1.4:obj.working?Math.sin(this.time*12)*.6-.5:-.2;
-        const s=mesh.userData.villagerStatus,key=obj.name+obj.owner+obj.role+obj.hp+(obj.favor?.[viewerName]||0);
+        const s=mesh.userData.villagerStatus,key=obj.name+obj.owner+obj.role+obj.hp+obj.heal+(obj.favor?.[viewerName]||0);
         if(s.key!==key){const ctx=s.cv.getContext('2d');ctx.fillStyle='#16231fee';ctx.fillRect(0,0,640,120);ctx.fillStyle=soldier?'#98dfff':'#f1e6b3';ctx.font='bold 29px sans-serif';ctx.textAlign='center';
-          ctx.fillText(obj.name+' · '+(soldier?obj.owner+'的小兵':'闲居村民 · E'),320,36,620);ctx.fillStyle='#98d899';ctx.fillRect(10,60,620*obj.hp/obj.max_hp,48);ctx.fillStyle='#fff';ctx.fillText(soldier?obj.hp+'/'+obj.max_hp:'好感 '+(obj.favor?.[viewerName]||0)+'/80 · 帮忙耕种可招募',320,94,620);s.map.needsUpdate=true;s.key=key;}
+          ctx.fillText(obj.name+' · '+(soldier?obj.owner+(obj.is_general?'的武将':'的小兵'):'闲居村民 · E'),320,36,620);ctx.fillStyle='#98d899';ctx.fillRect(10,60,620*obj.hp/obj.max_hp,48);ctx.fillStyle='#fff';ctx.fillText(soldier?obj.hp+'/'+obj.max_hp+(obj.heal?' 回血+'+obj.heal+'/秒':''):'好感 '+(obj.favor?.[viewerName]||0)+'/80 · 帮忙耕种可招募',320,94,620);s.map.needsUpdate=true;s.key=key;}
       }
       if (mesh.userData.animal) {
         const { body, legs, collar } = mesh.userData.animal;

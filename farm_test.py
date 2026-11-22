@@ -48,6 +48,23 @@ def main():
         hp=guard['hp'];g.last_tick=now+12;farm_system.advance(g,.05,now+12)
         assert guard['hp']==hp-14
         hp=farmer['hp'];guard['last_attack']=0;g.advance_enemies(.05,now+14);assert farmer['hp']<hp
+        # Living soldiers heal at their own camp and fountains, capped by max HP.
+        p.x,p.z=g.world['teams']['red']['spawn']
+        farmer.update(x=p.x,z=p.z,hp=40)
+        farm_system.advance(g,.05,now+15)
+        assert farmer['hp']>40 and farmer['heal']==24
+        farmer.update(x=p.x,z=p.z,hp=farmer['max_hp']-.1)
+        farm_system.advance(g,.05,now+16)
+        assert farmer['hp']==farmer['max_hp']
+        pool=g.pools[0];p.x,p.z=pool['x'],pool['z']
+        farmer.update(x=p.x,z=p.z,hp=40)
+        farm_system.advance(g,.05,now+17)
+        assert farmer['hp']>40 and farmer['heal']==pool['power']
+        crystal=next(o for o in g.objects if o['kind']=='crystal' and o['team']=='red')
+        crystal['hp']=0;farmer.update(x=p.x,z=p.z,hp=40)
+        farm_system.advance(g,.05,now+18)
+        assert farmer['hp']==40 and farmer['heal']==0
+        crystal['hp']=500
         # Saved growing crops and recruited identity survive restart.
         plot.update(stage=2,grow_until=time.monotonic()+25)
         farm_system.save(g);restored=Game(db)

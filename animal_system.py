@@ -260,7 +260,7 @@ def advance(game, dt, now):
             if math.hypot(owner.x - animal['x'], owner.z - animal['z']) > 14:
                 catch_up(game, animal, owner)
             targets = [o for o in game.objects if o['hp'] > 0 and
-                       (o['kind'] == 'enemy' and game.city_unlocked(o['city'])
+                       (o['kind'] == 'enemy' and o.get('team') != owner.team and game.city_unlocked(o['city'])
                         or o['kind'] == 'animal' and o['animal'] != 'dog')
                        and math.hypot(o['x'] - owner.x, o['z'] - owner.z) < 7
                        and not game.blocked(animal['x'], animal['z'], o['x'], o['z'])]

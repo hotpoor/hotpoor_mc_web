@@ -70,9 +70,22 @@ class StatsHandler(ApiHandler):
         self.json_response({"ok": True, "stats": self.db.stats()})
 
 
+def mode_game(application, mode):
+    mode = 'open' if mode == 'open' else 'campaign'
+    games = application.settings['games']
+    if mode not in games:
+        from conquest import OpenWorldGame
+        instance = OpenWorldGame(application.settings['db'])
+        instance.world['client_build'] = application.settings['client_build']
+        games[mode] = instance
+        if games['campaign']._periodic is not None:
+            instance.start()
+    return games[mode]
+
+
 class WorldHandler(ApiHandler):
     def get(self):
-        self.json_response({"ok": True, "world": self.application.settings["game"].world})
+        self.json_response({"ok": True, "world": mode_game(self.application, self.get_argument("mode", "campaign")).world})
 
 
 class GameSocket(tornado.websocket.WebSocketHandler):
@@ -81,8 +94,11 @@ class GameSocket(tornado.websocket.WebSocketHandler):
         # local game server.
         return True
 
+    def get_compression_options(self):
+        return {"compression_level": 3}
+
     def open(self):
-        self.game = self.application.settings["game"]
+        self.game = mode_game(self.application, self.get_argument("mode", "campaign"))
         self.game.register(self)
 
     def on_message(self, message):
@@ -125,6 +141,9 @@ def make_app(game, db):
             (r"/static/(.*)", StaticHandler, {"path": STATIC}),
         ],
         game=game,
+        games={"campaign": game},
+        client_build=game.world.get("client_build", "55"),
+        compress_response=True,
         db=db,
         static_path=STATIC,
         # Tornado prepends its own /static/ route when static_path is set, so

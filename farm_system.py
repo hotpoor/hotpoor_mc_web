@@ -113,6 +113,10 @@ def advance(game, dt, now):
             plot['stage'] = 3
     for npc in villagers:
         owner = players.get(npc['owner'])
+        rate = game.healing_rate(npc['x'],npc['z'],npc['team']) if npc['role']=='soldier' and npc['team'] in game.world['teams'] else 0
+        npc['heal'] = rate
+        if rate and npc['hp']<npc['max_hp']:
+            npc['hp']=round(min(npc['max_hp'],npc['hp']+rate*dt),1)
         if npc['role'] != 'soldier' or not owner:
             phase = now * .3 + npc['home_x']
             animal_system.move(game, npc, npc['home_x'] + math.sin(phase), npc['home_z'] + math.cos(phase), .65, dt)
@@ -123,9 +127,14 @@ def advance(game, dt, now):
         slot = pack.index(npc)
         side = -1 if slot % 2 == 0 else 1
         targets = [o for o in game.objects if o['hp'] > 0 and
-                   (o['kind'] == 'enemy' and game.city_unlocked(o['city']) or o['kind'] == 'animal' and o['animal'] != 'dog')
+                   (o['kind'] == 'enemy' and o.get('team') != owner.team and game.city_unlocked(o['city']) or o['kind'] == 'animal' and o['animal'] != 'dog')
                    and math.hypot(o['x'] - owner.x, o['z'] - owner.z) < 8
                    and not game.blocked(npc['x'], npc['z'], o['x'], o['z'])]
+        if game.world.get('mode') == 'open':
+            targets.extend({'kind':'player','player_id':p.id,'x':p.x,'z':p.z} for p in players.values()
+                           if p.team!=owner.team and now>=p.invuln_until and p.jump<1.4
+                           and math.hypot(p.x-owner.x,p.z-owner.z)<8
+                           and not game.blocked(npc['x'],npc['z'],p.x,p.z))
         target = min(targets, key=lambda o: math.hypot(o['x'] - npc['x'], o['z'] - npc['z']), default=None)
         if target:
             dx,dz = target['x'] - owner.x, target['z'] - owner.z
@@ -137,7 +146,11 @@ def advance(game, dt, now):
         animal_system.move(game,npc,tx,tz,3.7,dt,stop=.2)
         if target and math.hypot(target['x']-npc['x'],target['z']-npc['z'])<2 and now-npc['last_attack']>=1.1:
             npc['last_attack']=now
-            game.damage_object(owner,target,14,now)
+            if target['kind']=='player':
+                victim=game.players.get(target['player_id'])
+                if victim and victim.alive and now>=victim.invuln_until:game.damage(owner,victim,npc.get('attack_damage',14),now)
+            else:
+                game.damage_object(owner,target,npc.get('attack_damage',14),now)
     # Idle villagers and militia keep enough space to avoid merging into a single figure.
     for i,left in enumerate(villagers):
         for right in villagers[i+1:]:

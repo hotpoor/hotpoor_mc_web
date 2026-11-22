@@ -1,3 +1,4 @@
+import { installOpenWorldUI } from './open-world-ui.js?v=55';
 import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=49';
 
 // mc-web client: networking, input, prediction, HUD and panels.
@@ -11,7 +12,7 @@ const TEAM_CSS = { red: '#ef4f4f', blue: '#4c86f0' };
 let canvas = $('view');
 
 const G = {
-  ws: null, id: null, name: '', team: '', teamChoice: 'auto', skin: 'steve', world: null,
+  mode: new URLSearchParams(location.search).get('mode') || localStorage.getItem('mc.mode') || 'campaign', ws: null, id: null, name: '', team: '', teamChoice: 'auto', skin: 'steve', world: null,
   players: new Map(), me: null, renderer: null, connected: false, joined: false,
   keys: new Set(), mouse: { cx: innerWidth / 2, cy: innerHeight / 2, wx: 0, wz: 0 },
   attacking: false, lastAttack: -Infinity, weapon: '', drawStart: null, chatOpen: false, yaw: 0,
@@ -21,6 +22,8 @@ const G = {
   inputAcc: 0, hudAcc: 0, loopStarted: false,
   plates: new Map(), flashTimer: null, bannerTimer: null, reconnectTimer: null,
 };
+
+const openUI=installOpenWorldUI({G,$,send,esc,banner,log,cancelDraw});
 
 const randomName = () => '玩家' + Math.floor(1000 + Math.random() * 9000);
 function send(obj) {
@@ -57,7 +60,7 @@ window.addEventListener('focus', checkUpdate);
 function connect() {
   clearTimeout(G.reconnectTimer);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${ROOT.host}${ROOT.pathname}ws`);
+  const ws = new WebSocket(`${proto}://${ROOT.host}${ROOT.pathname}ws?mode=${encodeURIComponent(G.mode)}`);
   G.ws = ws;
   setConn(false, '连接中');
   ws.onopen = () => {
@@ -101,6 +104,7 @@ function onWelcome(msg) {
   G.blockIndex = new Map();
   for(const block of G.world.blocks){const key=Math.floor(block.x/4)+','+Math.floor(block.z/4);if(!G.blockIndex.has(key))G.blockIndex.set(key,[]);G.blockIndex.get(key).push(block);}
   G.joined = true;
+  openUI.onWelcome();
   updateSkinButton();
   G.weapon = "";
   updateWeaponLabel();
@@ -184,7 +188,7 @@ async function initRenderer() {
 // ---------------------------------------------------------------- state
 function applyState(s) {
   const seen = new Set();
-  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer'].includes(ev.k)).map(ev => ev.id));
+  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer', 'open_travel'].includes(ev.k)).map(ev => ev.id));
   for (const p of s.players) {
     seen.add(p.id);
     let o = G.players.get(p.id);
@@ -205,7 +209,7 @@ function applyState(s) {
     }
     o.lastX = p.x; o.lastZ = p.z;
     Object.assign(o, {
-      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, transferTarget: p.transfer_target, transferCd: p.transfer_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, hurt: p.hurt, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
+      name: p.name, team: p.team, skin: p.id === G.id ? G.skin : p.skin, weapon: p.id === G.id ? G.weapon : p.weapon, draw: p.draw, waveCd: p.wave_cd, beamCd: p.beam_cd, rocketCd: p.rocket_cd, gunCd: p.gun_cd, ammo: p.ammo, recall: p.recall, carriesCrystal: p.carries_crystal, recallCd: p.recall_cd, openTravel: p.open_travel, transferTarget: p.transfer_target, transferCd: p.transfer_cd, targetJump: p.jump || 0, yaw: p.yaw, hp: p.hp, alive: p.alive, hurt: p.hurt, armor: p.armor || {}, food: p.food || 0, poop: p.poop || 0,
       respawn: p.respawn, score: p.score, kills: p.kills, deaths: p.deaths,
       heal: p.heal, pool: p.pool, invuln: p.invuln,
     });
@@ -250,6 +254,7 @@ function applyState(s) {
   const objects = s.objects || [];
   G.objects = objects;
   G.campaignCleared = s.campaign_cleared || [];
+  if(G.mode!=='open'){
   const journalKey = G.campaignCleared.join(',');
   if (G.journalKey !== journalKey) {
     G.journalKey = journalKey;
@@ -269,6 +274,7 @@ function applyState(s) {
       + ' · 首领 ' + alive.filter(obj => obj.boss).length + '/3'
       + (alive.length ? '' : ' · 已肃清') + (G.campaignCleared.includes(city.id) ? ' · 沿大道前往下一城，出口驿站可按 E' : ' · 清城开启下一章');
   } else $('campaign-status').textContent = '第一城：往北前往黄巾起义城';
+  }else openUI.applyState(s);
   G.renderer?.syncObjectives?.(objects.filter(obj => obj.kind !== 'syllable' || enabledCraftModes().includes(materialMode(obj.material))), G.name);
   for (const team of ['red', 'blue']) {
     const crystal = objects.find(obj => obj.id === team);
@@ -282,6 +288,7 @@ function applyState(s) {
 }
 
 function handleEvent(ev) {
+  if(openUI.handleEvent(ev))return;
   switch (ev.k) {
     case 'join':
       log(`${ev.name} 加入了${G.world.teams[ev.team].short}阵营`, 'join');
@@ -402,6 +409,8 @@ function mapKey(key) {
 window.addEventListener('keydown', e => {
   if (e.isComposing || (e.target instanceof HTMLInputElement) || !G.joined) return;
   const k = mapKey(e.key);
+  if(openUI.isOpen()){if(k==='escape'||k==='m')openUI.closeMap();e.preventDefault();return;}
+  if(k==='m'&&G.mode==='open'&&!e.repeat){e.preventDefault();openUI.openMap();return;}
   if(!$('team-transfer-panel').classList.contains('hidden')){if(k==='escape'||k==='c')closeTransferPanel();e.preventDefault();return;}
   if(k==='c'&&!e.repeat){e.preventDefault();openTransferPanel();return;}
   if (k === 'enter') {
@@ -491,7 +500,7 @@ function currentMove() {
 function clientCollides(x, z) {
   const half = G.world.half, edge = half - 1.36;
   if (Math.abs(x) > edge || Math.abs(z) > edge) return true;
-  for (const [index, city] of (G.world.cities || []).entries()) {
+  for (const [index, city] of (G.mode==='open'?[]:G.world.cities || []).entries()) {
     if (Math.abs(x - city.x) < 18 && Math.abs(z - city.z) < 18
         && !(G.world.cities.slice(0, index).every(prev => (G.campaignCleared || []).includes(prev.id)))) return true;
   }
@@ -947,11 +956,12 @@ function updateHud() {
   const villagers = (G.objects || []).filter(obj => obj.kind === 'villager');
   const field = (G.objects || []).filter(obj => obj.kind === 'farm' && Math.hypot(obj.x - me.rx, obj.z - me.rz) < 2).sort((a,b)=>Math.hypot(a.x-me.rx,a.z-me.rz)-Math.hypot(b.x-me.rx,b.z-me.rz))[0];
   const nearFarmer = villagers.filter(obj=>obj.hp>0 && Math.hypot(obj.x-me.rx,obj.z-me.rz)<2).sort((a,b)=>Math.hypot(a.x-me.rx,a.z-me.rz)-Math.hypot(b.x-me.rx,b.z-me.rz))[0];
-  const army = villagers.filter(obj => obj.owner === G.name);
+  const army = villagers.filter(obj => obj.owner === G.name && !obj.is_general);
+  const generals= villagers.filter(obj=>obj.owner===G.name && obj.is_general);
   const fieldFarmer = field ? villagers.find(obj=>obj.id===field.farmer_id) : null;
   $('farm-status').textContent = field ? '军屯 · ' + ['E 耕地','E 播种','生长中 ' + field.grow_cd + '秒','E 收获粮食'][field.stage] + (fieldFarmer?.owner && fieldFarmer.owner !== G.name ? ' · 农民已归属 ' + fieldFarmer.owner : '')
-    : nearFarmer ? nearFarmer.role === 'soldier' ? nearFarmer.name + ' · ' + nearFarmer.owner + '的小兵 · ' + nearFarmer.hp + '/120' : nearFarmer.name + ' · 好感 ' + (nearFarmer.favor?.[G.name] || 0) + '/80 · E 招募'
-    : '军屯小兵 ' + army.filter(npc=>npc.hp>0).length + '名' + (army.some(npc=>!npc.hp) ? ' · 伤兵恢复中' : '') + ' · 村镇按 E 耕种结交村民';
+    : nearFarmer ? nearFarmer.role === 'soldier' ? nearFarmer.name + ' · ' + nearFarmer.owner + (nearFarmer.is_general?'的武将 · ':'的小兵 · ') + nearFarmer.hp + '/' + nearFarmer.max_hp : nearFarmer.name + ' · 好感 ' + (nearFarmer.favor?.[G.name] || 0) + '/80 · E 招募'
+    : '军屯小兵 ' + army.filter(npc=>npc.hp>0).length + '名 · 武将 '+generals.filter(npc=>npc.hp>0).length+'名' + (army.some(npc=>!npc.hp) ? ' · 伤兵恢复中' : '') + ' · 村镇按 E 耕种结交村民';
   $('pet-inventory').textContent = '狗粮 / 兽肉 ' + (me.food || 0) + '/20 · 狗屎 ' + (me.poop || 0) + '/10';
   const dogs = (G.objects || []).filter(obj => obj.kind === 'animal' && obj.animal === 'dog');
   const near = dogs.filter(obj => obj.hp > 0 && Math.hypot(obj.x - me.rx, obj.z - me.rz) < 4).sort((a, b) => Math.hypot(a.x - me.rx, a.z - me.rz) - Math.hypot(b.x - me.rx, b.z - me.rz))[0];
@@ -964,7 +974,7 @@ function updateHud() {
   $('collect-btn').disabled = !me.alive || !!me.recall;
   $('team-transfer-btn').textContent=me.recall&&me.transferTarget?'传送队友中 · '+me.recall.toFixed(1)+'秒':me.transferCd?'传送队友 · '+me.transferCd+'秒':'传送到队友 · C';
   $('team-transfer-btn').disabled=!me.alive||!!me.recall||!!me.transferCd;
-  $('recall-btn').textContent = me.recall ? (me.transferTarget?'传送中 · ':'回城中 · ') + me.recall.toFixed(1) + ' 秒'
+  $('recall-btn').textContent = me.recall ? (me.openTravel?'行军中 · ':me.transferTarget?'传送中 · ':'回城中 · ') + me.recall.toFixed(1) + ' 秒'
     : me.recallCd ? '回城 · ' + me.recallCd + ' 秒' : '回城 · H';
   $('recall-btn').disabled = !me.alive || !!me.recall || !!me.recallCd;
   $('gun-btn').textContent = '连射枪 · 5 · ' + (me.gunCd > 0 ? Math.ceil(me.gunCd) + ' 秒' : me.ammo + '/30');
@@ -983,7 +993,7 @@ function updateHud() {
 function updateDeath() {
   const me = G.me;
   const dying = !!(me && !me.alive);
-  if(dying)closeTransferPanel();
+  if(dying){closeTransferPanel();openUI.closeMap();}
   if (dying && G.monocular) { G.monocular = false; G.renderer?.setMonocular(false); $('monocular-view').classList.add('hidden'); $('monocular-btn').textContent = '单筒望远镜 · B'; setViewMode(G.scopeReturn); }
   $('death-overlay').classList.toggle('hidden', !dying);
   if (!dying) return;
@@ -993,6 +1003,7 @@ function updateDeath() {
 
 function drawMinimap() {
   const cv = $('minimap'), ctx = cv.getContext('2d');
+  if(G.mode==='open'){openUI.drawMini(cv);if(G.me)$('mini-pos').textContent=`${Math.round(G.me.rx)}, ${Math.round(G.me.rz)}`;return;}
   const size = cv.width, k = size / G.world.size;
   const tx = x => (x + G.world.half) * k, tz = z => (z + G.world.half) * k;
   ctx.clearRect(0, 0, size, size);

@@ -324,3 +324,23 @@ body.first-person #view { cursor: crosshair; }
 .transfer-card h3 { margin:0 0 12px; }
 .transfer-card p { font-size:13px; line-height:1.7; }
 .transfer-target { text-align:left; margin:8px 0; padding:12px; }
+
+.mode-picker { display:grid; gap:8px; margin-bottom:14px; }
+.mode-choice { border:1px solid #788373; background:#1e2a22; color:#edf3dc; padding:11px 14px; text-align:left; cursor:pointer; }
+.mode-choice b,.mode-choice span { display:block; }
+.mode-choice span { font-size:11px; color:#bfc9b7; margin-top:5px; line-height:1.5; }
+.mode-choice.active { border:2px solid #dfc981; background:#34402e; }
+.world-map-modal { position:fixed; inset:0; z-index:35; background:#071017dd; display:grid; place-items:center; padding:18px; }
+.world-map-card { width:min(1120px,98vw); max-height:94dvh; overflow:auto; padding:20px; }
+.world-map-head { display:flex; justify-content:space-between; gap:20px; align-items:start; }
+.world-map-head h2 { margin:0; color:#ecd498; font-size:22px; }
+.world-map-head p { color:#ccd8c9; font-size:12px; line-height:1.7; }
+.world-map-head button { width:auto; padding:8px 14px; }
+.world-map-grid { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:16px; }
+#world-map-canvas { display:block; width:100%; height:auto; border:1px solid #ac9664; background:#1a343d; cursor:crosshair; }
+#world-map-cities { max-height:610px; overflow:auto; }
+.world-city-row { display:block; width:100%; padding:9px; text-align:left; color:#e8eddf; background:#21302a; border:1px solid #52624f; cursor:pointer; margin-bottom:6px; line-height:1.5; }
+.world-city-row.active { border-color:#efd18b; background:#3e4934; }
+.world-city-row small { display:block; color:#bdc8be; }
+#world-map-city-info { min-height:90px; font-size:13px; line-height:1.8; color:#e1dfbf; padding:10px 2px; }
+@media(max-width:700px){.world-map-modal{padding:7px}.world-map-card{padding:12px}.world-map-grid{grid-template-columns:1fr}.world-map-head{gap:8px}.world-map-head h2{font-size:18px}#world-map-cities{max-height:220px;display:grid;grid-template-columns:1fr 1fr;gap:5px}.world-city-row{font-size:11px;margin:0}.login-card{max-height:94dvh;overflow:auto}}

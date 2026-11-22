@@ -342,7 +342,7 @@ class Game:
             name = "%s(%d)" % (base_name, suffix)
             suffix += 1
 
-        if requested_team in TEAMS:
+        if requested_team in self.world["teams"]:
             team = requested_team
         else:
             red = sum(1 for p in self.players.values() if p.team == "red")
@@ -353,7 +353,7 @@ class Game:
 
         saved = self.db.get_player(name) or {}
         pid = uuid.uuid4().hex[:8]
-        spawn = TEAMS[team]["spawn"]
+        spawn = self.world["teams"][team]["spawn"]
         now = time.monotonic()
         p = Player(
             id=pid, name=name, team=team, ws=ws,
@@ -373,7 +373,7 @@ class Game:
         self.sockets[ws] = pid
         self.db.upsert_player(p)
         self.db.add_history("join", p.name, team=team,
-                            detail="加入" + TEAMS[team]["name"])
+                            detail="加入" + self.world["teams"][team]["name"])
         self.emit({"k": "join", "id": pid, "name": name, "team": team})
 
         self.send(ws, {
@@ -808,7 +808,7 @@ class Game:
         return obj["owner"] == player.name or any(p.name == obj["owner"] and p.team == player.team for p in self.players.values())
 
     def targets(self, player):
-        return [obj for obj in self.objects if obj["hp"] > 0 and obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone", "animal") and obj.get("team") != player.team and not self.friendly_pet(player, obj)
+        return [obj for obj in self.objects if obj["hp"] > 0 and (obj["kind"] in ("crystal", "bomb", "dummy", "enemy", "time_stone", "animal") or obj["kind"] == "villager" and obj.get("role") == "soldier") and obj.get("team") != player.team and not self.friendly_pet(player, obj)
                 and (not obj.get("city") or self.city_unlocked(obj["city"]))]
 
     @staticmethod
@@ -843,6 +843,10 @@ class Game:
 
     def damage_object(self, player, obj, amount, now):
         if obj["hp"] <= 0 or (obj.get("city") and not self.city_unlocked(obj["city"])):
+            return
+        if obj["kind"] == "villager":
+            if obj.get("team") != player.team and obj.get("role") == "soldier":
+                farm_system.hurt(self, obj, amount, now)
             return
         if obj["kind"] == "animal":
             if self.friendly_pet(player, obj):
@@ -1117,7 +1121,7 @@ class Game:
                    "team": killer.team, "id": killer.id, "victim_id": victim.id})
 
     def respawn(self, p, now):
-        spawn = TEAMS[p.team]["spawn"]
+        spawn = self.world["teams"][p.team]["spawn"]
         p.alive = True
         p.grounded = True
         p.hp = MAX_HP
@@ -1127,7 +1131,7 @@ class Game:
         p.invuln_until = now + INVULN
         p.last_damage_at = now
         self.db.add_history("respawn", p.name, team=p.team,
-                            detail="在" + TEAMS[p.team]["name"] + "复活")
+                            detail="在" + self.world["teams"][p.team]["name"] + "复活")
         self.emit({"k": "respawn", "id": p.id, "name": p.name, "team": p.team})
 
     def push_players(self, previous):
@@ -1213,6 +1217,19 @@ class Game:
     def advance_animals(self, dt, now):
         animal_system.advance(self, dt, now)
 
+    def finish_special_channel(self, player, now):
+        return False
+
+    def healing_rate(self, x, z, team):
+        if not any(obj["kind"] == "crystal" and obj.get("team") == team and obj["hp"] > 0 for obj in self.objects):
+            return 0.0
+        pool = pool_at(x,z,self.pools)
+        rate = float(pool["power"]) if pool else 0.0
+        x0,x1,z0,z1 = self.world["teams"][team]["zone"]
+        if x0<=x<=x1 and z0<=z<=z1:
+            rate=max(rate,RULES["base_heal"])
+        return rate
+
     def transfer_arrival(self, target):
         for radius in (1.6, 2.5, 3.5):
             for step in range(12):
@@ -1240,7 +1257,6 @@ class Game:
                 if obj["kind"] in ("animal", "villager"):
                     obj.update(x=obj["home_x"], z=obj["home_z"], last_attack=now,
                                angry_at="", angry_until=0)
-        active_crystals = {obj["team"] for obj in self.objects if obj["kind"] == "crystal" and obj["hp"] > 0}
         previous = {p.id: (p.x, p.z) for p in self.players.values() if p.alive}
         for p in list(self.players.values()):
             if not p.alive:
@@ -1272,14 +1288,9 @@ class Game:
                 p.slam_pending = False
                 self.hammer_slam(p, now)
 
-            rate = 0.0
             pool = pool_at(p.x, p.z, self.pools)
             p.pool_name = pool["name"] if pool else ""
-            crystal_active = p.team in active_crystals
-            if pool and crystal_active:
-                rate = float(pool["power"])
-            if in_own_base(p.x, p.z, p.team) and crystal_active:
-                rate = max(rate, RULES["base_heal"])
+            rate = self.healing_rate(p.x, p.z, p.team)
             p.heal_rate = rate
             if rate and p.hp < MAX_HP:
                 p.hp = min(MAX_HP, p.hp + rate * dt)
@@ -1296,6 +1307,8 @@ class Game:
             if not p.alive or not p.grounded or (p.x, p.z) != previous.get(p.id):
                 p.recall_until = 0.0
             elif now >= p.recall_until:
+                if self.finish_special_channel(p, now):
+                    continue
                 p.recall_until = 0.0
                 if p.transfer_target:
                     target = self.players.get(p.transfer_target)
@@ -1310,7 +1323,7 @@ class Game:
                     self.emit({"k":"team_transfer","id":p.id,"target":target.name,"x":p.x,"z":p.z})
                     continue
                 p.recall_ready = now + 30
-                p.x, p.z = TEAMS[p.team]["spawn"]
+                p.x, p.z = self.world["teams"][p.team]["spawn"]
                 p.jump = p.jump_speed = 0.0
                 self.emit({"k": "recall", "id": p.id})
 
