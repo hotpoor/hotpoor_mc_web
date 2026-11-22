@@ -111,6 +111,16 @@ def advance(game, dt, now):
     for plot in game.objects:
         if plot['kind'] == 'farm' and plot['stage'] == 2 and now >= plot['grow_until']:
             plot['stage'] = 3
+    packs = {}
+    for npc in villagers:
+        if npc['owner']:
+            packs.setdefault(npc['owner'], []).append(npc)
+    slots = {npc['id']: i for pack in packs.values() for i,npc in enumerate(sorted(pack,key=lambda n:n['id']))}
+    hostiles = [o for o in game.objects if o['hp']>0 and (o['kind']=='enemy' and game.city_unlocked(o['city']) or o['kind']=='animal' and o['animal']!='dog')]
+    targets_by_owner = {name: [o for o in hostiles if o.get('team')!=owner.team and math.hypot(o['x']-owner.x,o['z']-owner.z)<8] for name,owner in players.items()}
+    if game.world.get('mode')=='open':
+        for name,owner in players.items():
+            targets_by_owner[name].extend({'kind':'player','player_id':p.id,'hp':p.hp,'x':p.x,'z':p.z} for p in players.values() if p.team!=owner.team and now>=p.invuln_until and p.jump<1.4 and math.hypot(p.x-owner.x,p.z-owner.z)<8)
     for npc in villagers:
         owner = players.get(npc['owner'])
         rate = game.healing_rate(npc['x'],npc['z'],npc['team']) if npc['role']=='soldier' and npc['team'] in game.world['teams'] else 0
@@ -123,19 +133,10 @@ def advance(game, dt, now):
             continue
         if math.hypot(npc['x'] - owner.x, npc['z'] - owner.z) > 16:
             animal_system.catch_up(game, npc, owner)
-        pack = sorted((n for n in villagers if n['owner'] == npc['owner']), key=lambda n:n['id'])
-        slot = pack.index(npc)
+        slot = slots[npc['id']]
         side = -1 if slot % 2 == 0 else 1
-        targets = [o for o in game.objects if o['hp'] > 0 and
-                   (o['kind'] == 'enemy' and o.get('team') != owner.team and game.city_unlocked(o['city']) or o['kind'] == 'animal' and o['animal'] != 'dog')
-                   and math.hypot(o['x'] - owner.x, o['z'] - owner.z) < 8
-                   and not game.blocked(npc['x'], npc['z'], o['x'], o['z'])]
-        if game.world.get('mode') == 'open':
-            targets.extend({'kind':'player','player_id':p.id,'x':p.x,'z':p.z} for p in players.values()
-                           if p.team!=owner.team and now>=p.invuln_until and p.jump<1.4
-                           and math.hypot(p.x-owner.x,p.z-owner.z)<8
-                           and not game.blocked(npc['x'],npc['z'],p.x,p.z))
-        target = min(targets, key=lambda o: math.hypot(o['x'] - npc['x'], o['z'] - npc['z']), default=None)
+        candidates = sorted((o for o in targets_by_owner.get(npc['owner'],()) if o['hp']>0),key=lambda o:(o['x']-npc['x'])**2+(o['z']-npc['z'])**2)
+        target = next((o for o in candidates if not game.blocked(npc['x'],npc['z'],o['x'],o['z'])),None)
         if target:
             dx,dz = target['x'] - owner.x, target['z'] - owner.z
             length = math.hypot(dx,dz) or 1
@@ -151,31 +152,33 @@ def advance(game, dt, now):
                 if victim and victim.alive and now>=victim.invuln_until:game.damage(owner,victim,npc.get('attack_damage',14),now)
             else:
                 game.damage_object(owner,target,npc.get('attack_damage',14),now)
-    # Idle villagers and militia keep enough space to avoid merging into a single figure.
-    for i,left in enumerate(villagers):
-        for right in villagers[i+1:]:
-            dx,dz=right['x']-left['x'],right['z']-left['z']
-            distance=math.hypot(dx,dz)
-            if distance>=1:continue
-            if distance<.001:dx,dz,distance=1,0,1
-            push=.12
-            for npc,sign in ((left,-1),(right,1)):
-                x,z=npc['x']+sign*dx/distance*push,npc['z']+sign*dz/distance*push
-                if not game.locked_city_at(x,z) and not collides(x,z,game.blocks,radius=.3):npc['x'],npc['z']=x,z
+    # Nearby buckets replace all-pairs separation as armies grow.
+    cells = {}
     for npc in villagers:
-        if npc['role'] != 'soldier':
-            continue
-        for pet in game.objects:
-            if pet['kind'] != 'animal' or pet['animal'] != 'dog' or not pet['owner'] or pet['hp'] <= 0:
-                continue
-            dx, dz = npc['x'] - pet['x'], npc['z'] - pet['z']
-            distance = math.hypot(dx, dz)
-            if distance >= 1.1:
-                continue
-            if distance < .001:
-                dx, dz, distance = 1, 0, 1
-            x, z = npc['x'] + dx / distance * .15, npc['z'] + dz / distance * .15
-            if not game.locked_city_at(x, z) and not collides(x, z, game.blocks, radius=.3):
-                npc['x'], npc['z'] = x, z
+        cells.setdefault((math.floor(npc['x']/2),math.floor(npc['z']/2)),[]).append(npc)
+    order={npc['id']:i for i,npc in enumerate(villagers)}
+    pets={}
+    for pet in game.objects:
+        if pet['kind']=='animal' and pet['animal']=='dog' and pet['owner'] and pet['hp']>0:
+            pets.setdefault((math.floor(pet['x']/2),math.floor(pet['z']/2)),[]).append(pet)
+    for left in villagers:
+        cx,cz=math.floor(left['x']/2),math.floor(left['z']/2)
+        for bx in range(cx-1,cx+2):
+            for bz in range(cz-1,cz+2):
+                for right in cells.get((bx,bz),()):
+                    if order[right['id']]<=order[left['id']]:continue
+                    dx,dz=right['x']-left['x'],right['z']-left['z'];distance=math.hypot(dx,dz)
+                    if distance>=1:continue
+                    if distance<.001:dx,dz,distance=1,0,1
+                    for npc,sign in ((left,-1),(right,1)):
+                        x,z=npc['x']+sign*dx/distance*.12,npc['z']+sign*dz/distance*.12
+                        if not game.locked_city_at(x,z) and not collides(x,z,game.blocks,radius=.3):npc['x'],npc['z']=x,z
+                if left['role']!='soldier':continue
+                for pet in pets.get((bx,bz),()):
+                    dx,dz=left['x']-pet['x'],left['z']-pet['z'];distance=math.hypot(dx,dz)
+                    if distance>=1.1:continue
+                    if distance<.001:dx,dz,distance=1,0,1
+                    x,z=left['x']+dx/distance*.15,left['z']+dz/distance*.15
+                    if not game.locked_city_at(x,z) and not collides(x,z,game.blocks,radius=.3):left['x'],left['z']=x,z
     if now-game.last_militia_save>60:
         save(game);game.last_militia_save=now

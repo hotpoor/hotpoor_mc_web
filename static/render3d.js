@@ -1,9 +1,10 @@
 // Three.js voxel renderer. Same interface as render2d.js so main.js can
 // transparently fall back if WebGL / the local three.js module is unavailable.
 import * as THREE from './vendor/three.module.js';
+import { CrowdRenderer } from './crowd-renderer.js?v=56';
 import { buildOpenWorldArt } from './open-world-art.js?v=55';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=54';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=56';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -65,6 +66,7 @@ export class Renderer3D {
     this.repairs = [];
     this.hits = [];
     this.objectives = new Map();
+
     this.recallEffects = new Map();
     this.bowKick = 0;
 
@@ -75,6 +77,7 @@ export class Renderer3D {
     this.qualityWindow={time:performance.now(),frames:0};
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
+    this.crowd = new CrowdRenderer(this.scene);
     this.scene.background = new THREE.Color(0xb7dcf2);
     this.scene.fog = new THREE.Fog(0xb7dcf2, 48, 105);
     this.camera = new THREE.PerspectiveCamera(54, 1, 0.1, 220);
@@ -107,7 +110,7 @@ export class Renderer3D {
     else { this.buildCities(); this.buildRoadside(); }
     this.resize();
     const owner=this;
-    window.__THREE_GAME_DIAGNOSTICS__={get render(){return {...owner.renderer.info.render}},get memory(){return {...owner.renderer.info.memory}},get dpr(){return owner.renderer.getPixelRatio()},get objectiveMeshes(){return owner.objectives.size}};
+    window.__THREE_GAME_DIAGNOSTICS__={get render(){return {...owner.renderer.info.render}},get memory(){return {...owner.renderer.info.memory}},get dpr(){return owner.renderer.getPixelRatio()},get objectiveMeshes(){return owner.objectives.size},get crowdActors(){return owner.crowd.count||0}};
   }
 
   buildViewModel() {
@@ -814,7 +817,7 @@ export class Renderer3D {
   disposeObjective(id, mesh) {
     this.scene.remove(mesh);
     const materials=new Set(),textures=new Set();
-    mesh.traverse(part=>{if(!part.isSprite&&!part.geometry?.userData.sharedWeapon)part.geometry?.dispose();
+    mesh.traverse(part=>{part.userData.disposed=true;if(!part.isSprite&&!part.geometry?.userData.sharedWeapon)part.geometry?.dispose();
       for(const mat of (Array.isArray(part.material)?part.material:[part.material]))if(mat){materials.add(mat);if(part.isSprite&&mat.map)textures.add(mat.map);}});
     for(const texture of textures)texture.dispose();
     for(const material of materials)material.dispose();
@@ -822,6 +825,11 @@ export class Renderer3D {
   }
 
   syncObjectives(objects, viewerName = '') {
+    const actorRange=this.monocular?350:this.world.mode==='open'?90:54;
+    const actors=objects.filter(o=>(o.kind==='enemy'||o.kind==='villager')&&o.hp>0&&Math.hypot(o.x-this.camTarget.x,o.z-this.camTarget.z)<actorRange);
+    actors.sort((a,b)=>(Math.hypot(a.x-this.camTarget.x,a.z-this.camTarget.z)-(this.objectives.has(a.id)?.75:0))-(Math.hypot(b.x-this.camTarget.x,b.z-this.camTarget.z)-(this.objectives.has(b.id)?.75:0)));
+    const detailed=new Set(actors.filter(o=>Math.hypot(o.x-this.camTarget.x,o.z-this.camTarget.z)<(this.monocular?90:22)).slice(0,16).map(o=>o.id));
+    let created=0;const simple=[];
     const active = new Set(objects.map(obj => obj.id));
     for (const [id, mesh] of this.objectives) {
       if (active.has(id)) continue;
@@ -832,9 +840,15 @@ export class Renderer3D {
       const range=this.world.mode==='open'?(this.monocular?350:90):(this.monocular?145:54);
       if(distance>range){const old=this.objectives.get(obj.id);if(old){if(distance>(this.world.mode==='open'?(this.monocular?400:180):(this.monocular?180:100)))this.disposeObjective(obj.id,old);else old.visible=false;}continue;}
       if (obj.kind === 'enemy' && this.cityBarriers?.has(obj.city)) this.cityBarriers.get(obj.city).visible = obj.locked;
+      const actor=obj.kind==='enemy'||obj.kind==='villager';
+      if(actor && obj.hp<=0){const old=this.objectives.get(obj.id);if(old)this.disposeObjective(obj.id,old);continue;}
+      if(actor && (!detailed.has(obj.id)||!this.objectives.has(obj.id)&&created>=4)){
+        const old=this.objectives.get(obj.id);if(old)this.disposeObjective(obj.id,old);simple.push(obj);continue;
+      }
       let mesh = this.objectives.get(obj.id);
       if(mesh && mesh.userData.objectKind!==obj.kind){this.disposeObjective(obj.id,mesh);mesh=null;}
       if (!mesh) {
+        if(actor)created++;
         const crystal = obj.kind === 'crystal';
         mesh = new THREE.Group();
         mesh.userData.objectKind=obj.kind;
@@ -1087,7 +1101,7 @@ export class Renderer3D {
         }
       }
       if(mesh.userData.villager){
-        const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;if(soldier)v.sword.userData.loadModel?.();
+        const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;if(soldier&&distance<8)v.sword.userData.loadModel?.();
         v.legs.forEach((leg,i)=>leg.rotation.x=obj.moving?Math.sin(this.time*7+i*Math.PI)*.4:0);v.arms[1].rotation.x=obj.attacking?-1.4:obj.working?Math.sin(this.time*12)*.6-.5:-.2;
         const s=mesh.userData.villagerStatus,key=obj.name+obj.owner+obj.role+obj.hp+obj.heal+(obj.favor?.[viewerName]||0);
         if(s.key!==key){const ctx=s.cv.getContext('2d');ctx.fillStyle='#16231fee';ctx.fillRect(0,0,640,120);ctx.fillStyle=soldier?'#98dfff':'#f1e6b3';ctx.font='bold 29px sans-serif';ctx.textAlign='center';
@@ -1167,6 +1181,7 @@ export class Renderer3D {
         }
       }
     }
+    this.crowd.sync(simple,this.time);
   }
 
   spawnSlam(event) {

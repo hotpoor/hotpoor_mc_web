@@ -31,6 +31,7 @@ export function attachWeaponModel(group, kind, overlay = false) {
   if (!config) return;
   const fallback = [...group.children];
   loadModel(kind).then(source => {
+    if(group.userData.disposed)return;
     const model = source.clone(true);
     // Share immutable geometry and maps, clone materials for first-person depth settings.
     model.traverse(mesh => {

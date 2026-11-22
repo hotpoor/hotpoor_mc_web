@@ -362,6 +362,12 @@ class OpenWorldGame(Game):
         self._sync_city_objects()
         self._save_conquest()
 
+    def team_changed(self,player,old_team,now):
+        self._marches.pop(player.id,None)
+        for record in self.general_owners.values():
+            if record['owner']==player.name:record['team']=player.team
+        self._save_conquest()
+
     def snapshot(self):
         self._sync_city_objects()
         state=super().snapshot()
@@ -369,14 +375,19 @@ class OpenWorldGame(Game):
             march=self._marches.get(row['id'])
             row['open_travel']=march['city'] if march and row['recall'] else ''
         cities=[]
+        defenders_by_city={cid:[] for cid in self.city_by_id}
+        generals_by_city={cid:[] for cid in self.city_by_id}
+        for obj in self.objects:
+            if obj['kind']=='enemy' and obj.get('guard'):defenders_by_city[obj['city']].append(obj)
+            if obj.get('is_general'):generals_by_city[obj['origin_city']].append(obj)
         for city in self.world['cities']:
-            defenders=self._city_defenders(city['id'])
+            defenders=defenders_by_city[city['id']]
             remaining=sum(o['hp']>0 for o in defenders)
             cities.append(dict(id=city['id'],name=city['name'],owner=self.city_owners[city['id']],
                                guards=remaining,defenders=remaining,total_defenders=len(defenders),capturable=remaining==0,
                                generals=[dict(id=o['id'],name=o['name'],owner=o.get('owner',''),team=o.get('team',''),
                                               recruited=o['kind']=='villager',hp=o['hp'])
-                                         for o in self.objects if o.get('is_general') and o.get('origin_city')==city['id']]))
+                                         for o in generals_by_city[city['id']]]))
         owned={team:sum(holder==team for holder in self.city_owners.values()) for team in ('red','blue')}
         state['conquest']=dict(owners=dict(self.city_owners),cities=cities,total=len(cities),owned=owned,
                                factions=self.world['factions'],victory=next((team for team,count in owned.items() if count==len(cities)),None))

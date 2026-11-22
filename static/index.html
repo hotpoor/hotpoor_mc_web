@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=55">
+<link rel="stylesheet" href="./style.css?v=56">
 </head>
 <body>
 
@@ -65,6 +65,7 @@
   <div id="open-conquest-status" class="hud-status hidden"></div>
   <button id="world-map-btn" class="view-btn hidden">天下地图 · M</button>
   <button id="mode-switch-btn" class="view-btn">切换游戏模式</button>
+  <button id="skin-toggle" class="view-btn" aria-controls="character-panel" aria-expanded="false">人物设置 · 阵营 / 皮肤</button>
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
   <button id="monocular-btn" class="view-btn">单筒望远镜 · B</button>
   <div id="pet-inventory" class="hud-status"></div>
@@ -76,8 +77,7 @@
   <button id="collect-btn" class="view-btn">采集水晶 · E</button>
   <button id="team-transfer-btn" class="view-btn">传送到队友 · C</button>
   <button id="recall-btn" class="view-btn">回城 · H</button>
-  <button id="skin-toggle" class="view-btn" aria-controls="game-skins" aria-expanded="false">皮肤 · 史蒂夫</button>
-  <div id="game-skins" class="skin-list hidden" role="group" aria-label="切换人物皮肤"></div>
+
   <fieldset id="craft-modes">
     <legend>全局武器合成</legend>
     <label><input type="checkbox" value="text" checked> 文字</label>
@@ -116,6 +116,7 @@
   <div id="tab-help" class="tab-body">
     <div class="help-title">怎么玩</div>
     <ul class="help-list">
+      <li>点击「人物设置」可随时换皮肤；更换红蓝阵营后回到新阵营大营，生命、物品和冷却保留。</li>
       <li>开放世界：登录时选择「三国开放世界」。按 M 查看中国城池地图、选择城外行军落点。自由攻城，击败守军后到府衙按 E 占领；己方属城可以招募降将。红蓝阵营可 PK 并争夺城池，章节模式进度独立保留。</li>
       <li>按 C 选择同阵营队友，引导 3 秒后传送到其附近安全位置，冷却 30 秒；移动、攻击、受伤会打断。队友离线或阵亡时取消。</li>
       <li>军屯种田：村镇空地有农田和闲居村民。靠近田地按 E 耕地、再按 E 播种，30 秒成熟后按 E 收获粮食。每轮好感 +40，80 好感后靠近对应村民按 E 招募为小兵，跟随助战，归属与好感会保存。</li>
@@ -148,6 +149,13 @@
   <div class="mini-legend"><span class="l-red">■ 赤焰老家</span><span class="l-blue">■ 苍蓝老家</span><span class="l-pool">● 回血池</span></div>
 </div>
 
+<div id="character-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="character-title"><div class="panel character-card">
+  <div class="world-map-head"><h2 id="character-title">阵营与皮肤</h2><button id="character-close" class="view-btn">返回战场 · Esc</button></div>
+  <p>中途换阵营会回到新阵营大营，保留生命、武器与冷却；已招募的武将、小兵会随你转投，已占城市归属不变。</p>
+  <div class="character-teams" role="group" aria-label="更换阵营"><button class="view-btn" data-change-team="red">加入赤焰 · 红方</button><button class="view-btn" data-change-team="blue">加入苍蓝 · 蓝方</button></div>
+  <div id="character-status" role="status"></div><h3>选择皮肤 · 即时生效</h3>
+  <div id="game-skins" class="skin-list" role="group" aria-label="切换人物皮肤"></div>
+</div></div>
 <div id="team-transfer-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="team-transfer-title"><div class="panel transfer-card"><h3 id="team-transfer-title">选择队友 · C</h3><p>引导 3 秒后抵达队友附近，冷却 30 秒。移动、受击或攻击会打断。</p><div id="team-transfer-targets"></div><button id="team-transfer-close" class="view-btn">取消 · Esc</button></div></div>
 <div id="world-map-panel" class="world-map-modal hidden" role="dialog" aria-modal="true" aria-labelledby="world-map-title"><div class="panel world-map-card">
   <div class="world-map-head"><div><h2 id="world-map-title">天下图 · 群雄割据</h2><p id="world-map-progress"></p></div><button id="world-map-close" class="view-btn">返回战场 · M / Esc</button></div>
@@ -211,6 +219,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=55"></script>
+<script type="module" src="./main.js?v=56"></script>
 </body>
 </html>

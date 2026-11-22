@@ -1,4 +1,4 @@
-import { installOpenWorldUI } from './open-world-ui.js?v=55';
+import { installOpenWorldUI } from './open-world-ui.js?v=56';
 import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=49';
 
 // mc-web client: networking, input, prediction, HUD and panels.
@@ -13,7 +13,7 @@ let canvas = $('view');
 
 const G = {
   mode: new URLSearchParams(location.search).get('mode') || localStorage.getItem('mc.mode') || 'campaign', ws: null, id: null, name: '', team: '', teamChoice: 'auto', skin: 'steve', world: null,
-  players: new Map(), me: null, renderer: null, connected: false, joined: false,
+  objectCache:new Map(), players: new Map(), me: null, renderer: null, connected: false, joined: false,
   keys: new Set(), mouse: { cx: innerWidth / 2, cy: innerHeight / 2, wx: 0, wz: 0 },
   attacking: false, lastAttack: -Infinity, weapon: '', drawStart: null, chatOpen: false, yaw: 0,
   viewMode: 'third', dragging: false, monocular: false, scopeReturn: 'third',
@@ -67,12 +67,13 @@ function connect() {
     checkUpdate();
     setConn(true);
     $('offline').classList.add('hidden');
-    send({ t: 'join', name: G.name, team: G.teamChoice === 'auto' ? null : G.teamChoice, skin: G.skin });
+    send({ t: 'join', name: G.name, team: G.teamChoice === 'auto' ? null : G.teamChoice, skin: G.skin, object_deltas:true });
   };
   ws.onmessage = e => {
     let msg;
     try { msg = JSON.parse(e.data); } catch (_) { return; }
     if (msg.t === 'welcome') onWelcome(msg);
+    else if(msg.t==='team_result')$('character-status').textContent=msg.message;
     else if (msg.t === 'state') applyState(msg);
     else if (msg.t === 'settings_result') {
       $('craft-status').textContent = msg.message;
@@ -101,6 +102,7 @@ function onWelcome(msg) {
   G.name = msg.name;
   G.team = msg.team;
   G.world = msg.world;
+  G.objectCache.clear();
   G.blockIndex = new Map();
   for(const block of G.world.blocks){const key=Math.floor(block.x/4)+','+Math.floor(block.z/4);if(!G.blockIndex.has(key))G.blockIndex.set(key,[]);G.blockIndex.get(key).push(block);}
   G.joined = true;
@@ -188,7 +190,7 @@ async function initRenderer() {
 // ---------------------------------------------------------------- state
 function applyState(s) {
   const seen = new Set();
-  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer', 'open_travel'].includes(ev.k)).map(ev => ev.id));
+  const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer', 'open_travel', 'team_changed'].includes(ev.k)).map(ev => ev.id));
   for (const p of s.players) {
     seen.add(p.id);
     let o = G.players.get(p.id);
@@ -216,6 +218,13 @@ function applyState(s) {
     // Our own facing is decided locally every frame (mouse look), never let
     // the 20 Hz snapshot overwrite it and cause jitter.
     if (p.id === G.id) {
+      if(G.team!==p.team){
+        G.team=G.teamChoice=p.team;G.keys.clear();G.attacking=false;cancelDraw();G.yaw=p.yaw;
+        const url=new URL(location.href);url.searchParams.set('team',p.team);history.replaceState(null,'',url);
+        $('hud-team').textContent=G.world.teams[p.team].name;$('hud-team').className='tag '+p.team;
+        $('hud-avatar').style.setProperty('--gold',TEAM_CSS[p.team]);updateSkinButton();
+        G.renderer?.setViewMode(G.viewMode,p.team);
+      }
       o.yaw = G.yaw;
       if (G.weapon !== p.weapon) {
         G.weapon = p.weapon;
@@ -251,7 +260,11 @@ function applyState(s) {
       for (const input of craftModeInputs) input.checked = modes.includes(input.value);
     }
   }
-  const objects = s.objects || [];
+  if(!s.object_delta)G.objectCache.clear();
+  for(const id of s.objects_removed||[])G.objectCache.delete(id);
+  for(const obj of s.objects||[])G.objectCache.set(obj.id,obj);
+  for(const patch of s.object_patches||[]){const obj=G.objectCache.get(patch.id);if(obj)Object.assign(obj,patch);}
+  const objects = [...G.objectCache.values()];
   G.objects = objects;
   G.campaignCleared = s.campaign_cleared || [];
   if(G.mode!=='open'){
@@ -288,6 +301,7 @@ function applyState(s) {
 }
 
 function handleEvent(ev) {
+  if(ev.k==='team_changed'){if(ev.id===G.id){$('character-status').textContent='已加入'+G.world.teams[ev.team].name+'，回到己方大营。';banner('已加入'+G.world.teams[ev.team].name);closeTransferPanel();}log(ev.name+'转投'+G.world.teams[ev.team].name,'join');return;}
   if(openUI.handleEvent(ev))return;
   switch (ev.k) {
     case 'join':
@@ -409,6 +423,7 @@ function mapKey(key) {
 window.addEventListener('keydown', e => {
   if (e.isComposing || (e.target instanceof HTMLInputElement) || !G.joined) return;
   const k = mapKey(e.key);
+  if(!$('character-panel').classList.contains('hidden')){if(k==='escape')closeCharacter();e.preventDefault();return;}
   if(openUI.isOpen()){if(k==='escape'||k==='m')openUI.closeMap();e.preventDefault();return;}
   if(k==='m'&&G.mode==='open'&&!e.repeat){e.preventDefault();openUI.openMap();return;}
   if(!$('team-transfer-panel').classList.contains('hidden')){if(k==='escape'||k==='c')closeTransferPanel();e.preventDefault();return;}
@@ -479,6 +494,7 @@ function sendChat() {
 }
 
 function currentMove() {
+  if(!$('character-panel').classList.contains('hidden'))return {mx:0,mz:0,sprint:false};
   const forward = (G.keys.has('w') ? 1 : 0) - (G.keys.has('s') ? 1 : 0);
   const strafe = (G.keys.has('d') ? 1 : 0) - (G.keys.has('a') ? 1 : 0);
   let mx = 0, mz = 0;
@@ -538,7 +554,8 @@ function fireGun() {
 }
 
 function updateSkinButton() {
-  $('skin-toggle').textContent = '皮肤 · ' + SKIN_NAMES[G.skin];
+  $('skin-toggle').textContent = '人物 · '+(G.world?.teams[G.team]?.short||'阵营')+' / '+ SKIN_NAMES[G.skin];
+  for(const button of document.querySelectorAll('[data-change-team]')){const active=button.dataset.changeTeam===G.team;button.disabled=active;button.setAttribute('aria-pressed',String(active));}
   for (const button of document.querySelectorAll('[data-skin]')) {
     button.setAttribute('aria-pressed', String(button.dataset.skin === G.skin));
   }
@@ -565,10 +582,18 @@ function setupSkinList(list) {
   }
 }
 
-$('skin-toggle').addEventListener('click', () => {
-  const hidden = $('game-skins').classList.toggle('hidden');
-  $('skin-toggle').setAttribute('aria-expanded', String(!hidden));
+function closeCharacter(){ $('character-panel').classList.add('hidden');$('skin-toggle').setAttribute('aria-expanded','false'); }
+$('skin-toggle').addEventListener('click',()=>{
+  G.keys.clear();G.attacking=false;cancelDraw();if(document.pointerLockElement)document.exitPointerLock();
+  $('character-panel').classList.remove('hidden');$('skin-toggle').setAttribute('aria-expanded','true');
+  $('character-status').textContent='当前阵营：'+G.world.teams[G.team].name;updateSkinButton();$('character-close').focus();
 });
+$('character-close').onclick=closeCharacter;
+for(const button of document.querySelectorAll('[data-change-team]'))button.onclick=()=>{
+  if(!G.me?.alive){$('character-status').textContent='复活后可以换阵营。';return;}
+  G.keys.clear();G.attacking=false;cancelDraw();send({t:'change_team',team:button.dataset.changeTeam});
+  $('character-status').textContent='正在更换阵营…';
+};
 
 $('hammer-btn').addEventListener('click', () => { if (G.joined) equip('hammer'); });
 $('mace-btn').addEventListener('click', () => { if (G.joined) equip('mace'); });

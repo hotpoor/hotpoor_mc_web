@@ -344,3 +344,10 @@ body.first-person #view { cursor: crosshair; }
 .world-city-row small { display:block; color:#bdc8be; }
 #world-map-city-info { min-height:90px; font-size:13px; line-height:1.8; color:#e1dfbf; padding:10px 2px; }
 @media(max-width:700px){.world-map-modal{padding:7px}.world-map-card{padding:12px}.world-map-grid{grid-template-columns:1fr}.world-map-head{gap:8px}.world-map-head h2{font-size:18px}#world-map-cities{max-height:220px;display:grid;grid-template-columns:1fr 1fr;gap:5px}.world-city-row{font-size:11px;margin:0}.login-card{max-height:94dvh;overflow:auto}}
+
+.character-card {width:min(760px,94vw);max-height:88dvh;overflow:auto;padding:22px;box-sizing:border-box;}
+.character-card p {font-size:13px;line-height:1.7;color:var(--muted);}
+.character-card .skin-list {max-height:none;overflow:visible;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));}
+.character-teams {display:flex;gap:12px;}.character-teams button {flex:1;min-height:44px;}
+.character-teams [aria-pressed="true"] {border-color:var(--gold);background:#594e30;}
+#character-status {min-height:22px;font-size:13px;color:var(--gold);margin-top:10px;}

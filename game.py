@@ -6,6 +6,7 @@ Everything that matters (position, HP, damage, scores) is decided here at
 render interpolated snapshots. That keeps PvP fair even with a modified client.
 """
 
+import copy
 import json
 import hashlib
 import hmac
@@ -76,6 +77,7 @@ class Player:
     weapon: str = ""
     weapons: dict = field(default_factory=dict)
     next_settings_attempt: float = 0.0
+    next_team_change: float = 0.0
     syllable: str = ""
     syllables: list = field(default_factory=list)
     slam_pending: bool = False
@@ -301,6 +303,7 @@ class Game:
         self.next_arrow_id = 0
         self.players = {}                 # id -> Player
         self.sockets = {}                 # ws -> player id or None
+        self.object_streams = {}
         self.team_score = {"red": 0, "blue": 0}
         self.events = []
         self.tick_no = 0
@@ -317,6 +320,7 @@ class Game:
         self.sockets[ws] = None
 
     def unregister(self, ws):
+        self.object_streams.pop(ws, None)
         pid = self.sockets.pop(ws, None)
         if not pid:
             return
@@ -398,6 +402,8 @@ class Game:
         kind = data.get("t")
         if kind == "join":
             self.join(ws, data.get("name"), data.get("team"), data.get("skin"))
+            if data.get("object_deltas") is True and ws not in self.object_streams:
+                self.object_streams[ws] = {"objects": {}, "initialized": False}
             return
         pid = self.sockets.get(ws)
         p = self.players.get(pid) if pid else None
@@ -433,6 +439,9 @@ class Game:
             return
         if kind == "craft":
             self.craft(p, data.get("weapon"), data.get("mode"))
+            return
+        if kind == "change_team":
+            self.change_team(p, data.get("team"), now)
             return
         if kind == "skin":
             skin = data.get("skin")
@@ -1328,10 +1337,68 @@ class Game:
                 self.emit({"k": "recall", "id": p.id})
 
         state = {"t": "state", **self.snapshot()}
-        payload = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+        payload = None
         for ws, pid in list(self.sockets.items()):
-            if pid:
-                self.send(ws, payload)
+            if not pid:
+                continue
+            stream=self.object_streams.get(ws)
+            if stream is not None:
+                pending=stream.get('pending')
+                if pending is not None and not pending.done():
+                    stream['events']=(stream.get('events',[])+state['events'])[-256:]
+                    continue
+                packet=self.stream_state(state,self.players[pid],stream)
+                stream['pending']=self.send(ws,packet)
+            else:
+                if payload is None:
+                    payload=json.dumps(state,ensure_ascii=False,separators=(',',':'))
+                self.send(ws,payload)
+
+    def stream_state(self,state,player,stream):
+        # Keep global crystals and owned companions, stream everything else nearby.
+        current={o['id']:o for o in state['objects'] if o['kind']=='crystal' or o.get('owner')==player.name or (o['x']-player.x)**2+(o['z']-player.z)**2<=380**2}
+        previous=stream['objects']
+        changed=[];patches=[]
+        for oid,obj in current.items():
+            old=previous.get(oid)
+            if old==obj:continue
+            if old is None or old.keys()!=obj.keys() or old.get('kind')!=obj.get('kind'):
+                changed.append(obj)
+            else:
+                patches.append({'id':oid,**{key:value for key,value in obj.items() if old[key]!=value}})
+        packet={**state,'object_patches':patches,'objects':changed,'object_delta':stream['initialized'],'objects_removed':list(previous.keys()-current.keys())}
+        if stream.get('events'):
+            packet['events']=stream.pop('events')+state['events']
+        stream['objects']={oid:copy.deepcopy(o) if previous.get(oid)!=o else previous[oid] for oid,o in current.items()}
+        stream['initialized']=True
+        return packet
+
+    def change_team(self,p,team,now):
+        if not isinstance(team,str) or team not in self.world['teams'] or team==p.team:
+            return
+        if not p.alive or now<p.next_team_change:
+            self.send(p.ws,{'t':'team_result','ok':False,'message':'复活后可以换阵营。' if not p.alive else '请稍候再换阵营。'})
+            return
+        old=p.team
+        self.drop_crystal(p,now)
+        p.team=team;p.next_team_change=now+3
+        p.x,p.z=self.world['teams'][team]['spawn'];p.yaw=0 if team=='red' else math.pi
+        p.mx=p.mz=p.jump=p.jump_speed=0;p.grounded=True
+        p.draw_started=None;p.slam_pending=False;p.recall_until=0;p.transfer_target=''
+        # Preserve HP, armor, inventory and all weapon cooldowns while relocating.
+        for arrow_id,arrow in list(self.arrows.items()):
+            if arrow.get('owner')==p.id:self.arrows.pop(arrow_id,None)
+        for npc in self.objects:
+            if npc['kind']=='villager' and npc.get('owner')==p.name:
+                npc['team']=team
+        farm_system.save(self)
+        self.team_changed(p,old,now)
+        self.db.upsert_player(p)
+        self.db.add_history('team_change',p.name,team=team,detail='转投'+self.world['teams'][team]['name'])
+        self.emit({'k':'team_changed','id':p.id,'name':p.name,'team':team,'old_team':old,'x':p.x,'z':p.z,'yaw':p.yaw})
+
+    def team_changed(self,player,old_team,now):
+        pass
 
     def snapshot(self):
         now = time.monotonic()
@@ -1384,6 +1451,6 @@ class Game:
         if not isinstance(payload, str):
             payload = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         try:
-            ws.write_message(payload)
+            return ws.write_message(payload)
         except Exception:
             pass
