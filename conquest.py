@@ -7,6 +7,7 @@ import uuid
 
 import animal_system
 import farm_system
+import workbench
 from campaign import NAME_SKINS
 from game import Game, Player, ARMOR_TYPES, MATERIALS, RECIPES, WEAPON_USES
 from world import collides
@@ -60,6 +61,7 @@ class OpenWorldGame(Game):
         self._build_objects()
         animal_system.initialize(self)
         farm_system.initialize(self)
+        workbench.initialize(self)
         self._sync_city_objects()
         self.world['conquest_goal'] = len(self.world['cities'])
 
@@ -317,10 +319,12 @@ class OpenWorldGame(Game):
         # Only this room's namespaced campaign data is reset.
         self.db.set_setting('dog_companions_v1','{}')
         self.db.set_setting('militia_farms_v1','{}')
+        self.db.set_setting('workbench_bags_v1','{}')
         self.objects=[]
         self._build_objects()
         animal_system.initialize(self)
         farm_system.initialize(self)
+        workbench.initialize(self)
         self._sync_city_objects()
         self._save_conquest()
         for p in self.players.values():

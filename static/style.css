@@ -356,3 +356,10 @@ body.first-person #view { cursor: crosshair; }
 #world-restart-confirm p {font-size:13px;line-height:1.6;color:#f6dfcf;}
 #world-restart-accept {border-color:#dc7865;color:#ffd3c6;}
 #world-restart-status {color:#ffd3c6;font-size:13px;line-height:1.6;}
+
+#workbench-recipes {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.workbench-recipe {padding:13px;text-align:left;background:#29352a;color:#f2e5c1;border:1px solid #a58f59;cursor:pointer;min-height:100px;}
+.workbench-recipe b,.workbench-recipe span,.workbench-recipe small {display:block;line-height:1.7;}
+.workbench-recipe span {font-size:12px;}.workbench-recipe small {font-size:11px;color:#abd0bb;}
+.workbench-recipe:disabled {opacity:.55;cursor:default;}
+@media(max-width:500px){#workbench-recipes{grid-template-columns:1fr}}

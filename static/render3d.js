@@ -1050,11 +1050,23 @@ export class Renderer3D {
           model.scale.setScalar(1.45);
           if (obj.weapon !== 'beam') model.rotation.z = -.18;
           mesh.add(model);
-          const label = labelSprite(obj.text + (obj.uses ? ' · ' + obj.uses + '次' : '') + ' · E', obj.rarity === 'boss' ? '#e6b0ff' : '#ffe78b', 640, 100, 38);
+          const label = labelSprite(obj.text + (obj.uses ? ' · ' + (obj.uses===-1?'无限':obj.uses+'次') : '') + ' · E', obj.rarity === 'boss' ? '#e6b0ff' : '#ffe78b', 640, 100, 38);
           label.position.y = 2.25;
           label.scale.set(obj.rarity ? 3.5 : 2.4, .75, 1);
           label.material.depthTest = true;
           mesh.add(label);
+        } else if(obj.kind==='workbench'){
+          const wood=box(1.2,.85,1.2,0x99703d,.45);wood.material.map=this.tiles.bark.map;mesh.add(wood);
+          mesh.add(box(1.3,.13,1.3,0xc99957,.95));
+          for(const i of [-.36,0,.36]){const line=box(.025,.015,1.16,0x62432d,1.025);line.position.x=i;mesh.add(line);const cross=box(1.16,.015,.025,0x62432d,1.025);cross.position.z=i;mesh.add(cross);}
+          const hammer=box(.17,.38,.22,0xb8bfc1,.66);hammer.position.set(.62,.66,.12);mesh.add(hammer);
+          const label=labelSprite('合成工作台 · E','#f1cb81',512,110,40);label.position.y=1.7;label.scale.set(3.8,.8,1);label.material.depthTest=true;mesh.add(label);
+        } else if(obj.kind==='resource'){
+          const cfg=this.world.resources[obj.resource];
+          mesh.add(box(.72,.62,.72,obj.resource==='wood'?0xa77743:obj.resource==='obsidian'?0x292136:0x737c7c,.31));
+          if(obj.resource==='wood')mesh.children[0].material.map=this.tiles.bark.map;
+          else for(const [x,z] of [[-.2,.1],[.14,.24],[.25,-.15]]){const vein=box(.2,.12,.18,cfg.color,.67);vein.position.set(x,.67,z);mesh.add(vein);}
+          const label=labelSprite(cfg.name+' · E',cfg.color,384,90,34);label.position.y=1.05;label.scale.set(2.2,.52,1);label.material.depthTest=true;mesh.add(label);
         } else if (obj.kind === 'syllable' || obj.kind === 'forge') {
           const forge = obj.kind === 'forge';
           const ring = new THREE.Mesh(new THREE.RingGeometry(forge ? 1.6 : .23, forge ? 2 : .35, 36),

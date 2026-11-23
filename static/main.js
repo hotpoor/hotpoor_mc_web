@@ -1,3 +1,4 @@
+import {installWorkbench} from './workbench-ui.js?v=58';
 import { installOpenWorldUI } from './open-world-ui.js?v=57';
 import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=49';
 
@@ -23,6 +24,7 @@ const G = {
   plates: new Map(), flashTimer: null, bannerTimer: null, reconnectTimer: null,
 };
 
+const workbenchUI=installWorkbench({G,$,send,cancelDraw,banner,log});
 const openUI=installOpenWorldUI({G,$,send,esc,banner,log,cancelDraw});
 
 const randomName = () => '玩家' + Math.floor(1000 + Math.random() * 9000);
@@ -191,7 +193,7 @@ async function initRenderer() {
 // ---------------------------------------------------------------- state
 function applyState(s) {
   const restarted=(s.events||[]).some(ev=>ev.k==='open_restarted');
-  if(restarted){G.keys.clear();G.attacking=false;cancelDraw();}
+  if(restarted){workbenchUI.close();G.keys.clear();G.attacking=false;cancelDraw();}
   const seen = new Set();
   const recalled = new Set((s.events || []).filter(ev => ['recall', 'chapter_travel', 'team_transfer', 'open_travel', 'team_changed'].includes(ev.k)).map(ev => ev.id));
   for (const p of s.players) {
@@ -238,6 +240,7 @@ function applyState(s) {
       o.syllable = p.syllable;
       o.syllables = p.syllables;
       o.forgeNear = p.forge_near;
+      o.resources=p.resources||{};o.workbenchNear=!!p.workbench_near;
     }
   }
   for (const id of [...G.players.keys()]) {
@@ -304,6 +307,7 @@ function applyState(s) {
 }
 
 function handleEvent(ev) {
+  if(workbenchUI.handleEvent(ev))return;
   if(ev.k==='team_changed'){if(ev.id===G.id){$('character-status').textContent='已加入'+G.world.teams[ev.team].name+'，回到己方大营。';banner('已加入'+G.world.teams[ev.team].name);closeTransferPanel();}log(ev.name+'转投'+G.world.teams[ev.team].name,'join');return;}
   if(openUI.handleEvent(ev))return;
   switch (ev.k) {
@@ -426,6 +430,7 @@ function mapKey(key) {
 window.addEventListener('keydown', e => {
   if (e.isComposing || (e.target instanceof HTMLInputElement) || !G.joined) return;
   const k = mapKey(e.key);
+  if(workbenchUI.isOpen()){if(k==='escape')workbenchUI.close();else if(k==='Tab'||(k==='enter'||k===' ')&&e.target instanceof HTMLButtonElement)return;e.preventDefault();return;}
   if(!$('character-panel').classList.contains('hidden')){if(k==='escape')closeCharacter();e.preventDefault();return;}
   if(openUI.isOpen()){if(k==='escape'||k==='m')openUI.closeMap();e.preventDefault();return;}
   if(k==='m'&&G.mode==='open'&&!e.repeat){e.preventDefault();openUI.openMap();return;}
@@ -497,6 +502,7 @@ function sendChat() {
 }
 
 function currentMove() {
+  if(workbenchUI.isOpen())return {mx:0,mz:0,sprint:false};
   if(!$('character-panel').classList.contains('hidden'))return {mx:0,mz:0,sprint:false};
   const forward = (G.keys.has('w') ? 1 : 0) - (G.keys.has('s') ? 1 : 0);
   const strafe = (G.keys.has('d') ? 1 : 0) - (G.keys.has('a') ? 1 : 0);
@@ -679,7 +685,7 @@ function updateWeaponSlots(me) {
     const slot = slotButtons[index];
     slot.disabled = !uses;
     slot.setAttribute('aria-pressed', String(weapon === G.weapon));
-    slot.textContent = ('1234567890[]'[index]) + ' · ' + name + (uses ? ' · ' + uses : '');
+    slot.textContent = ('1234567890[]'[index]) + ' · ' + name + (uses ? ' · ' + (uses===-1?'∞':uses) : '');
   });
 }
 
@@ -977,6 +983,7 @@ function updateHud() {
   $('wave-btn').textContent = me.waveCd > 0 ? '气功波 · ' + Math.ceil(me.waveCd) + ' 秒' : '气功波 · Q';
   const charge = G.weapon === 'beam' && me.draw != null ? ' · 蓄力 ' + Math.floor(me.draw * 100) + '%' : '';
   updateForge(me);
+  workbenchUI.render();
   updateWeaponSlots(me);
   const uses = me.weapons?.[G.weapon];
   $('drop-weapon').disabled = !me.alive || !uses;

@@ -22,6 +22,7 @@ from itertools import combinations
 from tornado.ioloop import PeriodicCallback
 from campaign import CHARACTERS, NAME_SKINS
 import animal_system
+import workbench
 import farm_system
 
 from world import (RULES, TEAMS, build_world, collides, in_own_base,
@@ -80,6 +81,7 @@ class Player:
     next_team_change: float = 0.0
     syllable: str = ""
     syllables: list = field(default_factory=list)
+    resources: dict = field(default_factory=dict)
     slam_pending: bool = False
     skin: str = "steve"
     crystal_source: str | None = None
@@ -299,6 +301,7 @@ class Game:
                      "whole": recipe_materials(sounds, False), "split": recipe_materials(sounds, True)}
             for weapon, (word, sounds) in RECIPES.items()
         }
+        workbench.initialize(self)
         self.arrows = {}
         self.next_arrow_id = 0
         self.players = {}                 # id -> Player
@@ -373,6 +376,7 @@ class Game:
             last_input=now,
             invuln_until=now + INVULN,
         )
+        workbench.load_bag(self,p)
         self.players[pid] = p
         self.sockets[ws] = pid
         self.db.upsert_player(p)
@@ -436,6 +440,9 @@ class Game:
             self.db.set_setting("craft_modes", ",".join(selected))
             self.craft_modes = selected
             self.send(ws, {"t": "settings_result", "ok": True, "message": "全局设置已同步"})
+            return
+        if kind == "workbench_craft":
+            workbench.craft(self,p,data.get("weapon"))
             return
         if kind == "craft":
             self.craft(p, data.get("weapon"), data.get("mode"))
@@ -574,12 +581,12 @@ class Game:
             p.weapons[p.weapon] -= 1
 
     def forge_near(self, p):
-        return any(obj["kind"] == "forge" and math.hypot(p.x - obj["x"], p.z - obj["z"]) <= 3
+        return any(obj["kind"] in ("forge","workbench") and math.hypot(p.x - obj["x"], p.z - obj["z"]) <= 3
                    for obj in self.objects)
 
     def craft(self, p, weapon, mode):
         if (not isinstance(weapon, str) or weapon not in RECIPES or mode not in self.craft_modes
-                or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0) >= WEAPON_USES[mode]):
+                or not p.alive or not self.forge_near(p) or p.weapons.get(weapon, 0)==-1 or p.weapons.get(weapon, 0) >= WEAPON_USES[mode]):
             return
         recipe = self.world["recipes"][weapon]
         remaining = p.syllables.copy()
@@ -688,15 +695,23 @@ class Game:
                 self.drop_crystal(player, now)
             return
         available = [obj for obj in self.objects
-                     if obj["hp"] and nearby(obj) and (obj["kind"] in ("ore", "dropped_crystal")
+                     if obj["hp"] and nearby(obj,3.5 if obj["kind"]=="workbench" else 2) and (obj["kind"] in ("ore", "dropped_crystal")
+                         or obj["kind"] == "workbench"
+                         or obj["kind"] == "resource" and player.resources.get(obj["resource"],0)<99
                          or obj["kind"] in ("farm", "villager")
                          or (obj["kind"] == "food_pickup" and player.food < 20)
                          or (obj["kind"] == "poop_pickup" and player.poop < 10)
                          or (obj["kind"] == "armor_pickup" and (not player.armor or obj["durability"] > player.armor["durability"] or ARMOR_TYPES[obj["armor_kind"]]["reduction"] > player.armor["reduction"]))
                          or (obj["kind"] == "syllable" and self.material_mode(obj["material"]) in self.craft_modes)
-                         or (obj["kind"] == "weapon_pickup" and player.weapons.get(obj["weapon"], 0) < obj.get("uses", WEAPON_USES["pickup"])))]
+                         or (obj["kind"] == "weapon_pickup" and self.weapon_upgrade(player,obj)))]
         ore = min(available, key=lambda obj: math.hypot(player.x - obj["x"], player.z - obj["z"]), default=None)
         if ore:
+            if ore["kind"] == "workbench":
+                self.emit({"k":"workbench_open","id":player.id})
+                return
+            if ore["kind"] == "resource":
+                workbench.collect(self,player,ore,now)
+                return
             if ore["kind"] == "farm":
                 farm_system.work(self, player, ore, now)
                 return
@@ -787,9 +802,14 @@ class Game:
                              "ready": 0, "expires": now + 180})
         player.armor = {}
 
+    @staticmethod
+    def weapon_upgrade(player,obj):
+        old=player.weapons.get(obj['weapon'],0);uses=obj.get('uses',WEAPON_USES['pickup'])
+        return old!=-1 and (uses==-1 or old<uses)
+
     def drop_weapon(self, p, now):
         weapon = p.weapon
-        if p.weapons.get(weapon, 0) > 0:
+        if p.weapons.get(weapon, 0):
             uses = p.weapons.pop(weapon)
             p.weapon = ""
             p.draw_started = None
@@ -1411,6 +1431,7 @@ class Game:
                 "alive": p.alive, "hurt": now < p.hurt_until, "armor": dict(p.armor), "weapon": p.weapon, "skin": p.skin, "carries_crystal": bool(p.crystal_source), "jump": round(p.jump, 3),
                 "food": p.food, "poop": p.poop, "weapons": p.weapons, "syllable": p.syllable, "syllables": p.syllables,
                 "forge_near": self.forge_near(p),
+                "resources":dict(p.resources),"workbench_near":workbench.near(self,p),
                 "wave_cd": round(max(0, p.wave_ready - now), 1),
                 "beam_cd": round(max(0, p.beam_ready - now), 1),
                 "rocket_cd": round(max(0, p.rocket_ready - now), 1),

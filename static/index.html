@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=57">
+<link rel="stylesheet" href="./style.css?v=58">
 </head>
 <body>
 
@@ -69,6 +69,8 @@
   <button id="skin-toggle" class="view-btn" aria-controls="character-panel" aria-expanded="false">人物设置 · 阵营 / 皮肤</button>
   <button id="view-toggle" class="view-btn">视角：第三人称 · 按 V 切换</button>
   <button id="monocular-btn" class="view-btn">单筒望远镜 · B</button>
+  <button id="workbench-btn" class="view-btn" disabled>合成工作台 · 靠近后 E</button>
+  <div id="resource-bag" class="hud-status"></div>
   <div id="pet-inventory" class="hud-status"></div>
   <div id="farm-status" class="hud-status"></div>
   <div id="pet-status" class="hud-status"></div>
@@ -117,6 +119,7 @@
   <div id="tab-help" class="tab-body">
     <div class="help-title">怎么玩</div>
     <ul class="help-list">
+      <li>开局营地有合成工作台。地表按 E 拾取木材、石料、铁矿、灵晶、黑曜石，材料进入材料袋；靠近工作台按 E 合成武器。龟派气功护符需要黑曜石4、灵晶2、铁矿1，蓄力释放，冷却5秒、无限使用。材料点20秒刷新。</li>
       <li>点击「人物设置」可随时换皮肤；更换红蓝阵营后回到新阵营大营，生命、物品和冷却保留。</li>
       <li>开放世界：登录时选择「三国开放世界」。按 M 查看中国城池地图、选择城外行军落点。自由攻城，击败守军后到府衙按 E 占领；己方属城可以招募降将。红蓝阵营可 PK 并争夺城池，章节模式进度独立保留。</li>
       <li>按 C 选择同阵营队友，引导 3 秒后传送到其附近安全位置，冷却 30 秒；移动、攻击、受伤会打断。队友离线或阵亡时取消。</li>
@@ -150,6 +153,10 @@
   <div class="mini-legend"><span class="l-red">■ 赤焰老家</span><span class="l-blue">■ 苍蓝老家</span><span class="l-pool">● 回血池</span></div>
 </div>
 
+<div id="workbench-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="workbench-title"><div class="panel character-card">
+ <div class="world-map-head"><h2 id="workbench-title">合成工作台</h2><button id="workbench-close" class="view-btn">返回战场 · Esc</button></div>
+ <p id="workbench-hint"></p><div id="workbench-recipes"></div>
+</div></div>
 <div id="character-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="character-title"><div class="panel character-card">
   <div class="world-map-head"><h2 id="character-title">阵营与皮肤</h2><button id="character-close" class="view-btn">返回战场 · Esc</button></div>
   <p>中途换阵营会回到新阵营大营，保留生命、武器与冷却；已招募的武将、小兵会随你转投，已占城市归属不变。</p>
@@ -225,6 +232,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=57"></script>
+<script type="module" src="./main.js?v=58"></script>
 </body>
 </html>
