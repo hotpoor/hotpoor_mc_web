@@ -15,6 +15,7 @@ const settings = {
   dual: { height: 1.08, grip: .29 },
   spear: { height: 1.65, grip: .42 },
   silver_spear: { height: 1.75, grip: .21 },
+  tiger_spear: { height: 1.8, grip: .25 },
   blade: { height: 1.65, grip: .42 },
   halberd: { height: 1.65, grip: .42 },
 };

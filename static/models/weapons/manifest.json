@@ -136,5 +136,35 @@
     ],
     "animations": 0,
     "texture_max_size": 1024
+  },
+  "tiger_spear": {
+    "task_id": "38105209-63f3-4149-8771-9a1bd1888fb4",
+    "model": "v3.1-20260211",
+    "source": "GPT image to Tripo CN v3 model",
+    "reference": "assets/concepts/tiger_spear.png",
+    "triangles": 38970,
+    "bytes": 5904564,
+    "source_bytes": 14437860,
+    "materials": 1,
+    "meshes": 1,
+    "textures": [
+      {
+        "width": 2048,
+        "height": 2048,
+        "mime": "image/jpeg"
+      },
+      {
+        "width": 2048,
+        "height": 2048,
+        "mime": "image/jpeg"
+      },
+      {
+        "width": 2048,
+        "height": 2048,
+        "mime": "image/png"
+      }
+    ],
+    "animations": 0,
+    "texture_max_size": 2048
   }
 }

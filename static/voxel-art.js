@@ -1,4 +1,4 @@
-import { attachWeaponModel } from './weapon-models.js?v=60';
+import { attachWeaponModel } from './weapon-models.js?v=62';
 import * as THREE from './vendor/three.module.js';
 
 export function voxelMaterial(kind) {
@@ -61,6 +61,13 @@ export function makeWeapon(kind, overlay = false, generated = true) {
     part(.31, .08, .13, 0xe9bb68, 0, .17);
     part(.14, .62, .09, 0xb8d0df, 0, .50);
     part(.085, .12, .085, 0xe2eef4, 0, .86);
+  } else if (kind === 'tiger_spear') {
+    part(.10,1.55,.10,0xbd8d2c,0,.35);part(.13,.32,.13,0x602d22,0,-.03);
+    for(const y of [-.4,.18,.75,1.02])part(.16,.06,.16,0xf0c665,0,y);
+    part(.30,.30,.20,0xc9942f,0,1.05);part(.23,.12,.12,0x5b3616,0,1.03,.12);
+    for(const x of [-.13,.13]){part(.10,.12,.14,0xd5a64b,x,1.24);part(.045,.04,.03,0xffd86d,x*.6,1.12,.12);}
+    part(.15,.45,.09,0xe4bd56,0,1.40);part(.08,.18,.06,0xffdc83,0,1.71);
+    for(const x of [-.1,0,.1])part(.07,.28,.06,0xb72e2e,x,.81,.06);
   } else if (kind === 'silver_spear') {
     part(.085,1.5,.085,0xc7dce7,0,.35);
     part(.10,.31,.10,0x43748e,0,-.05);

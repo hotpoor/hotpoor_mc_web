@@ -4,11 +4,11 @@ import * as THREE from './vendor/three.module.js';
 import { CrowdRenderer } from './crowd-renderer.js?v=56';
 import { buildOpenWorldArt } from './open-world-art.js?v=55';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=60';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=62';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
-const MELEE_WEAPONS = ['sword','axe','mace','hammer','dual','spear','blade','halberd','silver_spear'];
+const MELEE_WEAPONS = ['sword','axe','mace','hammer','dual','spear','blade','halberd','silver_spear','tiger_spear'];
 const TEAM_HEX = { red: 0xef4f4f, blue: 0x4c86f0 };
 const ARC = Math.PI * 65 / 180;
 
@@ -149,9 +149,9 @@ export class Renderer3D {
     const right = createArm(-.43);
     const left = createArm(.43);
     const weapons = {};
-    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'silver_spear', 'beam']) {
+    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'silver_spear', 'tiger_spear', 'beam']) {
       const weapon = makeWeapon(kind, overlay, false);
-      if(kind==='silver_spear'&&overlay)weapon.scale.setScalar(.70);
+      if(['silver_spear','tiger_spear'].includes(kind)&&overlay)weapon.scale.setScalar(.70);
       weapon.position.set(0, MELEE_WEAPONS.includes(kind) ? -.56 : -.58, MELEE_WEAPONS.includes(kind) ? .02 : .12);
       weapon.visible = kind === 'sword';
       right.pivot.add(weapon);
@@ -203,7 +203,7 @@ export class Renderer3D {
     rig.weapons[weapon]?.userData.loadModel?.();
     if(weapon==='dual')rig.secondSword.userData.loadModel?.();
     const right = rig.right.pivot;
-    right.position.y = weapon === 'silver_spear' ? (rig === this.viewRig ? .10 : .05) : 0;
+    right.position.y = ['silver_spear','tiger_spear'].includes(weapon) ? (rig === this.viewRig ? .10 : .05) : 0;
     const left = rig.left.pivot;
     const bow = weapon === 'bow';
     this.showWeapon(rig.weapons, weapon);
@@ -883,7 +883,7 @@ export class Renderer3D {
             }
             const blade = box(.1, .85, .12, 0xc9d0cc, -.22);
             blade.position.z = .3;
-            if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(0,-.56,.02);silver.rotation.x=.95;arms[1].add(silver);mesh.userData.silverWeapon=silver;}else arms[1].add(blade);
+            if(['silver_spear','tiger_spear'].includes(obj.weapon)){const silver=makeWeapon(obj.weapon,false,false);silver.position.set(0,-.56,.02);silver.rotation.x=.95;arms[1].add(silver);mesh.userData.silverWeapon=silver;}else arms[1].add(blade);
             if (boss) {
               body.add(box(.22, .32, .19, 0x382923, 1.41));
               body.scale.setScalar(1.2);
@@ -1036,7 +1036,7 @@ export class Renderer3D {
             arm.material = new THREE.MeshLambertMaterial({ map: skin.sleeve });
             arm.position.x = side * .45; mesh.add(arm);
           }
-          if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(.5,.5,.1);mesh.add(silver);mesh.userData.silverWeapon=silver;}
+          if(['silver_spear','tiger_spear'].includes(obj.weapon)){const silver=makeWeapon(obj.weapon,false,false);silver.position.set(.5,.5,.1);mesh.add(silver);mesh.userData.silverWeapon=silver;}
           const label = labelSprite(obj.name + ' · 对话 E', '#91e9d4', 448, 100, 38);
           label.position.y = 2.5; label.scale.set(3.1, .7, 1); label.material.depthTest = true; mesh.add(label);
         } else if (obj.kind === 'chapter_gate') {
@@ -1152,7 +1152,7 @@ export class Renderer3D {
         body.rotation.y = obj.yaw || 0;
         const moving = mesh.userData.lastX !== undefined && Math.hypot(obj.x - mesh.userData.lastX, obj.z - mesh.userData.lastZ) > .001;
         legs.forEach((leg, i) => leg.rotation.x = moving ? Math.sin(this.time * 8 + i * Math.PI) * .5 : 0);
-        arms[1].rotation.x = obj.attacking ? -1.8 : obj.weapon === 'silver_spear' ? -.95 : -.15;
+        arms[1].rotation.x = obj.attacking ? -1.8 : ['silver_spear','tiger_spear'].includes(obj.weapon) ? -.95 : -.15;
         body.position.y = obj.hurt ? .09 : 0;
         mesh.userData.lastX = obj.x; mesh.userData.lastZ = obj.z;
       }

@@ -1,0 +1,40 @@
+{
+  "asset": "tiger_spear",
+  "reference": "assets/concepts/tiger_spear.png",
+  "source": "GPT image reference",
+  "provider": "Tripo3D",
+  "region": "cn",
+  "base_url": "https://openapi.tripo3d.com/v3",
+  "model_version": "v3.1-20260211",
+  "texture_quality": "detailed",
+  "geometry_quality": "detailed",
+  "face_limit": 40000,
+  "smart_low_poly": false,
+  "runtime_texture_max_size": 2048,
+  "status": "success",
+  "task_id": "38105209-63f3-4149-8771-9a1bd1888fb4",
+  "credential_probe": "TRIPO_API_KEY=SET",
+  "references_read": [
+    "threejs-3d-generator/references/api-notes.md",
+    "threejs-3d-generator/references/threejs-integration.md",
+    "threejs-3d-generator/references/image-generator-workflows.md",
+    "https://developers.tripo3d.com/zh/docs/generation-image-to-model/standard",
+    "https://developers.tripo3d.com/zh/docs/generation-multiview-to-model/standard"
+  ],
+  "failure": null,
+  "credits_consumed": 60.0,
+  "rejected_attempts": [
+    {
+      "task_id": "4ebbde03-92ff-4f05-8366-4d0ab4313b13",
+      "credits_consumed": 60.0,
+      "reason": "Single image reconstruction produced two tiger heads instead of the intended single head."
+    }
+  ],
+  "generation_type": "multiview_to_model",
+  "views": {
+    "front": "assets/concepts/tiger_spear.png",
+    "left": "assets/concepts/tiger_spear-left.png",
+    "back": "assets/concepts/tiger_spear-back.png",
+    "right": "assets/concepts/tiger_spear-right.png"
+  }
+}

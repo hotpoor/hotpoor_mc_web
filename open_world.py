@@ -45,7 +45,7 @@ CITY_DATA = [
  ('zitong','梓潼',105.16,31.64,'zhang',[('张任','spear'),('冷苞','spear'),('邓贤','sword')]),
  ('jiangzhou','江州',106.55,29.56,'zhang',[('严颜','blade'),('吴懿','sword'),('李严','spear')]),
  ('hanzhong','汉中',107.02,33.07,'frontier',[('张鲁','beam'),('庞德','mace'),('杨松','sword')]),
- ('wuwei','武威',102.64,37.93,'frontier',[('马超','spear'),('马岱','spear'),('马腾','blade')]),
+ ('wuwei','武威',102.64,37.93,'frontier',[('马超','tiger_spear'),('马岱','spear'),('马腾','blade')]),
  ('xiangping','襄平',123.17,41.27,'frontier',[('公孙度','spear'),('公孙瓒','spear'),('田豫','bow')]),
 ]
 
