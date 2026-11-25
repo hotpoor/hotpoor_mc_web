@@ -41,6 +41,7 @@ KILL_SCORE = RULES["kill_score"]
 DEATH_PENALTY = RULES["death_penalty"]
 TICK_MS = 1000 // RULES["tick_rate"]
 ARMOR_TYPES = {
+    "crystal": {"name": "灵晶甲", "max_durability": 180, "reduction": .6},
     "iron": {"name": "铁甲", "max_durability": 80, "reduction": .4},
     "elite": {"name": "精甲", "max_durability": 160, "reduction": .6},
 }

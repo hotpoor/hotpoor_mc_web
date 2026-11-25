@@ -1,5 +1,5 @@
 """Physical material gathering and camp crafting, independent of spelling recipes."""
-import json,math,random
+import json,math,random,time
 from world import collides
 RESOURCES={
  'wood':{'name':'木材','color':'#a77743','amount':3},
@@ -9,6 +9,7 @@ RESOURCES={
  'obsidian':{'name':'黑曜石','color':'#7045ab','amount':2},
 }
 RECIPES={
+ 'crystal_armor':{'name':'灵晶甲','cost':{'iron':4,'crystal':6},'armor_kind':'crystal','durability':180},
  'tiger_spear':{'name':'虎头湛金枪 · 马超','cost':{'wood':3,'iron':6,'crystal':3},'uses':30},
  'silver_spear':{'name':'亮银枪 · 赵云','cost':{'wood':3,'iron':6,'crystal':3},'uses':30},
  'sword':{'name':'宝剑','cost':{'wood':2,'iron':3},'uses':30},
@@ -67,7 +68,16 @@ def collect(game,p,obj,now):
  save_bag(game,p);game.emit(dict(k='material_pickup',id=p.id,x=obj['x'],z=obj['z'],text=RESOURCES[resource]['name']+' +'+str(amount)))
 def craft(game,p,weapon):
  if not isinstance(weapon,str) or weapon not in RECIPES or not p.alive or p.recall_until or not near(game,p):return
- recipe=RECIPES[weapon];old=p.weapons.get(weapon,0);uses=recipe['uses']
+ recipe=RECIPES[weapon]
+ if recipe.get('armor_kind'):
+  kind=recipe['armor_kind'];cfg=game.world['armor_types'][kind]
+  if p.armor.get('kind')==kind and p.armor.get('durability',0)>=cfg['max_durability']:return
+  if any(p.resources.get(k,0)<v for k,v in recipe['cost'].items()):return
+  for key,amount in recipe['cost'].items():p.resources[key]-=amount
+  game.drop_armor(p,time.monotonic())
+  p.armor={**cfg,'kind':kind,'durability':cfg['max_durability']}
+  save_bag(game,p);game.emit(dict(k='workbench_crafted',id=p.id,text='已合成并穿戴灵晶甲，耐久180，减伤60%。'));return
+ old=p.weapons.get(weapon,0);uses=recipe['uses']
  if old==-1 or uses!=-1 and old>=uses:return
  if any(p.resources.get(k,0)<v for k,v in recipe['cost'].items()):return
  for key,amount in recipe['cost'].items():p.resources[key]-=amount

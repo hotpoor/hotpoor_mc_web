@@ -1,4 +1,4 @@
-import {installWorkbench} from './workbench-ui.js?v=58';
+import {installWorkbench} from './workbench-ui.js?v=63';
 import { installOpenWorldUI } from './open-world-ui.js?v=57';
 import { SKIN_NAMES, drawSkinFace } from './player-skins.js?v=49';
 

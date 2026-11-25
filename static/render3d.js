@@ -181,7 +181,7 @@ export class Renderer3D {
   applyArmArmor(rig, armor) {
     for (const arm of [rig.left, rig.right]) {
       arm.armor.visible = !!armor?.durability;
-      arm.armor.material.color.setHex(armor?.kind === 'elite' ? 0xe2c87b : 0xd9e0e7);
+      arm.armor.material.color.setHex(armor?.kind === 'crystal' ? 0x79dce8 : armor?.kind === 'elite' ? 0xe2c87b : 0xd9e0e7);
     }
   }
 
@@ -678,7 +678,7 @@ export class Renderer3D {
 
       const ud = g.userData;
       ud.armor.visible = !!p.armor?.durability;
-      for (const part of ud.armor.children) part.material.color.setHex(p.armor?.kind === 'elite' ? 0xe2c87b : 0xd9e0e7);
+      for (const part of ud.armor.children) part.material.color.setHex(p.armor?.kind === 'crystal' ? 0x79dce8 : p.armor?.kind === 'elite' ? 0xe2c87b : 0xd9e0e7);
       this.applyArmArmor(ud.rig, p.armor);
       ud.bowKick = Math.max(0, (ud.bowKick || 0) - dt);
       ud.walk += (p.moving || 0) * dt * 11;
@@ -1014,7 +1014,7 @@ export class Renderer3D {
           const label = labelSprite((poop ? '狗屎' : '狗粮 / 兽肉') + ' · E', poop ? '#c3a47b' : '#e7dca3', 448, 100, 38);
           label.position.y = .9; label.scale.set(2.2, .5, 1); label.material.depthTest = true; mesh.add(label);
         } else if (obj.kind === 'armor_pickup') {
-          const color = obj.armor_kind === 'elite' ? 0xe2c87b : 0xd9e0e7;
+          const color = obj.armor_kind === 'crystal' ? 0x79dce8 : obj.armor_kind === 'elite' ? 0xe2c87b : 0xd9e0e7;
           const model = new THREE.Group();
           model.add(box(.65, .65, .35, color, .9));
           for (const side of [-1, 1]) {
