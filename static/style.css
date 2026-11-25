@@ -363,3 +363,39 @@ body.first-person #view { cursor: crosshair; }
 .workbench-recipe span {font-size:12px;}.workbench-recipe small {font-size:11px;color:#abd0bb;}
 .workbench-recipe:disabled {opacity:.55;cursor:default;}
 @media(max-width:500px){#workbench-recipes{grid-template-columns:1fr}}
+
+/* Keep character lists inside the viewport while actions stay reachable. */
+.login-card {display:flex;flex-direction:column;max-height:calc(100dvh - 24px);min-height:0;box-sizing:border-box;overflow:auto;}
+.login-card > * {flex-shrink:0;}
+#login-skins, #game-skins {overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;scrollbar-gutter:stable;min-height:60px;align-content:start;padding:3px;}
+#login-skins {flex:0 1 240px;max-height:30dvh;}
+#character-panel .character-card {display:flex;flex-direction:column;max-height:calc(100dvh - 40px);overflow:hidden;}
+#character-panel .character-card > :not(.skin-list) {flex-shrink:0;}
+#character-panel #game-skins {flex:1 1 auto;max-height:50dvh;overflow-y:auto;}
+#character-panel .world-map-head {min-width:0;}
+#character-panel .skin-card {min-height:60px;}
+@media(max-height:800px) {
+ .login-card {padding:12px 18px;}
+ .login-cube,.login-sub,.login-foot {display:none;}
+ .login-card h1 {font-size:23px;}
+ .login-card .field-label {margin:7px 0 4px;}
+ .login-card .join-btn {margin-top:8px;padding:9px;}
+ .login-card .login-msg {margin-top:4px;min-height:14px;}
+ #character-panel .character-card {padding:12px;}
+ #character-panel .character-card p {font-size:11px;line-height:1.4;margin:5px 0;}
+ #character-panel h3 {margin:6px 0;}
+}
+
+.login-setup,.login-skin-picker,.login-actions {display:contents;}
+@media(max-height:480px) and (min-width:600px) {
+ .login-card {width:min(760px,96vw);height:calc(100dvh - 24px);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;column-gap:18px;overflow:auto;}
+ .login-card h1 {display:none;}
+ .login-setup {display:block;grid-column:1;grid-row:1 / 3;}
+ .login-skin-picker {display:flex;flex-direction:column;grid-column:2;grid-row:1;min-height:0;}
+ .login-actions {display:block;grid-column:2;grid-row:2;}
+ #login-skins {flex:1;max-height:none;min-height:0;margin:0;}
+ #join-btn {min-height:44px;}
+ .mode-choice {padding:7px 10px;}
+ .mode-choice span {font-size:10px;margin-top:2px;}
+ #character-panel .character-card p {display:none;}
+}

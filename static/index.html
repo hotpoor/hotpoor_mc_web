@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>方块战场 · 我的世界网页版</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=63">
+<link rel="stylesheet" href="./style.css?v=64">
 </head>
 <body>
 
@@ -165,7 +165,7 @@
   <p>中途换阵营会回到新阵营大营，保留生命、武器与冷却；已招募的武将、小兵会随你转投，已占城市归属不变。</p>
   <div class="character-teams" role="group" aria-label="更换阵营"><button class="view-btn" data-change-team="red">加入赤焰 · 红方</button><button class="view-btn" data-change-team="blue">加入苍蓝 · 蓝方</button></div>
   <div id="character-status" role="status"></div><h3>选择皮肤 · 即时生效</h3>
-  <div id="game-skins" class="skin-list" role="group" aria-label="切换人物皮肤"></div>
+  <div id="game-skins" tabindex="0" class="skin-list" role="group" aria-label="切换人物皮肤"></div>
 </div></div>
 <div id="team-transfer-panel" class="transfer-modal hidden" role="dialog" aria-modal="true" aria-labelledby="team-transfer-title"><div class="panel transfer-card"><h3 id="team-transfer-title">选择队友 · C</h3><p>引导 3 秒后抵达队友附近，冷却 30 秒。移动、受击或攻击会打断。</p><div id="team-transfer-targets"></div><button id="team-transfer-close" class="view-btn">取消 · Esc</button></div></div>
 <div id="world-map-panel" class="world-map-modal hidden" role="dialog" aria-modal="true" aria-labelledby="world-map-title"><div class="panel world-map-card">
@@ -207,6 +207,7 @@
     <div class="login-cube"></div>
     <h1>方块战场</h1>
     <p class="login-sub">基于 Tornado + WebSocket 的多人体素对抗</p>
+    <div class="login-setup">
     <label class="field-label">选择模式</label>
     <div class="mode-picker" role="group" aria-label="选择游戏模式">
       <button class="mode-choice" data-mode="campaign"><b>方块战场 · 十章征战</b><span>保留现有关卡、村镇与军屯玩法</span></button>
@@ -220,11 +221,16 @@
       <button class="pick red" data-team="red"><i></i>赤焰营地</button>
       <button class="pick blue" data-team="blue"><i></i>苍蓝营地</button>
     </div>
-    <div class="field-label">人物皮肤</div>
-    <div id="login-skins" class="skin-list" role="group" aria-label="选择人物皮肤"></div>
+    </div>
+    <div class="login-skin-picker">
+    <div id="login-skin-label" class="field-label">人物皮肤 · 可滚动选择</div>
+    <div id="login-skins" tabindex="0" class="skin-list" role="group" aria-label="选择人物皮肤"></div>
+    </div>
+    <div class="login-actions">
     <button id="join-btn" class="join-btn">进入世界</button>
     <div id="login-msg" class="login-msg"></div>
     <div class="login-foot">回血池争夺 · 击杀计分 · 5 秒回城复活 · 战绩存 SQLite</div>
+    </div>
   </div>
 </div>
 
@@ -235,6 +241,6 @@
   </div>
 </div>
 
-<script type="module" src="./main.js?v=63"></script>
+<script type="module" src="./main.js?v=64"></script>
 </body>
 </html>
