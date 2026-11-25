@@ -202,6 +202,7 @@ export class Renderer3D {
     rig.weapons[weapon]?.userData.loadModel?.();
     if(weapon==='dual')rig.secondSword.userData.loadModel?.();
     const right = rig.right.pivot;
+    right.position.y = weapon === 'silver_spear' ? (rig === this.viewRig ? .26 : .12) : 0;
     const left = rig.left.pivot;
     const bow = weapon === 'bow';
     this.showWeapon(rig.weapons, weapon);
