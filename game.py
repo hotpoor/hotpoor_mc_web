@@ -122,10 +122,12 @@ RECIPES = {
     "spear": ("丈八蛇矛", ('zhàng', 'bā', 'shé', 'máo')),
     "blade": ("青龙偃月刀", ('qīng', 'lóng', 'yǎn', 'yuè', 'dāo')),
     "halberd": ("方天画戟", ('fāng', 'tiān', 'huà', 'jǐ')),
+    "silver_spear": ("亮银枪", ("liàng", "yín", "qiāng")),
 }
 WEAPON_USES = {"pickup": 10, "text": 15, "whole": 20, "split": 30}
 
 PINYIN = {
+    "liàng": ("亮", "l", "iàng"), "yín": ("银", "y", "ín"),
     "bǎo": ("宝", "b", "ǎo"), "jiàn": ("剑 / 箭", "j", "iàn"),
     "gōng": ("弓", "g", "ōng"), "guī": ("龟", "g", "uī"),
     "pài": ("派", "p", "ài"), "huǒ": ("火", "h", "uǒ"),
@@ -262,6 +264,7 @@ class Game:
             for i, name in enumerate(city["allies"]):
                 self.objects.append({"id": f"ally-{cid}-{i}", "kind": "story_npc", "city": cid,
                                      "name": name, "skin": NAME_SKINS[name], "text": city["story"],
+                                     "weapon": "silver_spear" if name=="赵云" else "",
                                      "x": cx - 10, "z": cz + i * 3 - 3, "hp": 1, "max_hp": 1, "ready": 0})
             index = city["chapter"] - 1
             for direction, dest in (("next", index + 1), ("prev", index - 1)):
@@ -555,7 +558,7 @@ class Game:
                         self.spend_weapon(p)
                         self.shoot(p, yaw, pitch, now, min(1.0, now - started))
             else:
-                cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5, "dual": 0.7, "spear": 1, "blade": 1.2, "halberd": 1.35}.get(p.weapon, ATTACK_CD)
+                cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5, "dual": 0.7, "spear": 1, "blade": 1.2, "halberd": 1.35, "silver_spear": 1.1}.get(p.weapon, ATTACK_CD)
                 if now - p.last_attack >= cooldown and not p.slam_pending:
                     self.spend_weapon(p)
                     if p.weapon == "hammer" and not p.grounded:
@@ -613,8 +616,8 @@ class Game:
 
     # ---------------------------------------------------------------- combat
     def attack(self, p, yaw, now):
-        damage = {"axe": 36, "mace": 42, "hammer": 55, "dual": 38, "spear": 44, "blade": 49, "halberd": 52}.get(p.weapon, ATTACK_DAMAGE)
-        cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5, "dual": 0.7, "spear": 1, "blade": 1.2, "halberd": 1.35}.get(p.weapon, ATTACK_CD)
+        damage = {"axe": 36, "mace": 42, "hammer": 55, "dual": 38, "spear": 44, "blade": 49, "halberd": 52, "silver_spear": 65}.get(p.weapon, ATTACK_DAMAGE)
+        cooldown = {"axe": .85, "mace": 1.1, "hammer": 1.5, "dual": 0.7, "spear": 1, "blade": 1.2, "halberd": 1.35, "silver_spear": 1.1}.get(p.weapon, ATTACK_CD)
         if not p.alive or now - p.last_attack < cooldown:
             return
         p.last_attack = now

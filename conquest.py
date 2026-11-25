@@ -130,7 +130,7 @@ class OpenWorldGame(Game):
                 recruited=bool(record.get('owner') and record.get('team') in ('red','blue'))
                 obj=dict(id=gid,general_id=gid,is_general=True,city=cid,origin_city=cid,
                          name=name,skin=general.get('skin',NAME_SKINS.get(name,'ranger')),
-                         weapon=weapon,attack_damage=28,loot=weapon,boss=True,guard=True,color=self._holder_color(owner),
+                         weapon=weapon,attack_damage=65 if weapon=='silver_spear' else 28,loot=weapon,boss=True,guard=True,color=self._holder_color(owner),
                          x=x,z=z,home_x=x,home_z=z,max_hp=hp,hp=hp,ready=0,yaw=0,last_attack=0,
                          team=owner,faction=owner)
                 if recruited:
@@ -399,7 +399,7 @@ class OpenWorldGame(Game):
             if chasing and distance<2 and target.jump<1.4 and now>=target.invuln_until and now-enemy['last_attack']>=1.2 and not self.blocked(enemy['x'],enemy['z'],target.x,target.z):
                 enemy['last_attack']=now
                 attacker=Player(enemy['id'],enemy['name'],'npc',None,enemy['x'],enemy['z'],yaw=enemy['yaw'])
-                self.damage(attacker,target,22 if enemy.get('boss') else 9,now)
+                self.damage(attacker,target,65 if enemy.get('weapon')=='silver_spear' else 22 if enemy.get('boss') else 9,now)
 
     def restore_world(self,now,source):
         super().restore_world(now,source)

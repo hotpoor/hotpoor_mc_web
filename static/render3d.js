@@ -4,7 +4,7 @@ import * as THREE from './vendor/three.module.js';
 import { CrowdRenderer } from './crowd-renderer.js?v=56';
 import { buildOpenWorldArt } from './open-world-art.js?v=55';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=56';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=59';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -148,8 +148,9 @@ export class Renderer3D {
     const right = createArm(-.43);
     const left = createArm(.43);
     const weapons = {};
-    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'beam']) {
+    for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'silver_spear', 'beam']) {
       const weapon = makeWeapon(kind, overlay, false);
+      if(kind==='silver_spear'&&overlay)weapon.scale.setScalar(.55);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
       right.pivot.add(weapon);
@@ -879,7 +880,8 @@ export class Renderer3D {
               arm.add(box(.23, .65, .25, robe, -.25)); body.add(arm); arms.push(arm);
             }
             const blade = box(.1, .85, .12, 0xc9d0cc, -.22);
-            blade.position.z = .3; arms[1].add(blade);
+            blade.position.z = .3;
+            if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(0,-.55,.15);arms[1].add(silver);}else arms[1].add(blade);
             if (boss) {
               body.add(box(.22, .32, .19, 0x382923, 1.41));
               body.scale.setScalar(1.2);
@@ -1032,6 +1034,7 @@ export class Renderer3D {
             arm.material = new THREE.MeshLambertMaterial({ map: skin.sleeve });
             arm.position.x = side * .45; mesh.add(arm);
           }
+          if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(.5,.5,.1);mesh.add(silver);}
           const label = labelSprite(obj.name + ' · 对话 E', '#91e9d4', 448, 100, 38);
           label.position.y = 2.5; label.scale.set(3.1, .7, 1); label.material.depthTest = true; mesh.add(label);
         } else if (obj.kind === 'chapter_gate') {

@@ -9,6 +9,7 @@ RESOURCES={
  'obsidian':{'name':'黑曜石','color':'#7045ab','amount':2},
 }
 RECIPES={
+ 'silver_spear':{'name':'亮银枪 · 赵云','cost':{'wood':3,'iron':6,'crystal':3},'uses':30},
  'sword':{'name':'宝剑','cost':{'wood':2,'iron':3},'uses':30},
  'bow':{'name':'弓箭','cost':{'wood':4,'stone':2},'uses':30},
  'axe':{'name':'斧子','cost':{'wood':2,'iron':3},'uses':30},

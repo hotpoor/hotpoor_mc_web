@@ -61,6 +61,15 @@ export function makeWeapon(kind, overlay = false, generated = true) {
     part(.31, .08, .13, 0xe9bb68, 0, .17);
     part(.14, .62, .09, 0xb8d0df, 0, .50);
     part(.085, .12, .085, 0xe2eef4, 0, .86);
+  } else if (kind === 'silver_spear') {
+    part(.085,1.5,.085,0xc7dce7,0,.35);
+    part(.10,.31,.10,0x43748e,0,-.05);
+    for(const y of [-.36,.16,.73,.96])part(.13,.055,.13,0xf0f6fa,0,y);
+    part(.18,.13,.15,0x5a98b5,0,1.05);
+    part(.115,.42,.08,0xe8f7ff,0,1.30);
+    part(.075,.2,.065,0xffffff,0,1.57);
+    for(const side of [-1,1]){part(.09,.24,.07,0xa8cfe3,side*.055,1.19).rotation.z=side*.25;part(.055,.30,.05,0xc84648,side*.10,.92).rotation.z=side*.22;}
+    part(.065,.14,.065,0xf2f7fa,0,-.46);
   } else if (['spear', 'blade', 'halberd'].includes(kind)) {
     part(.095, 1.21, .095, 0x704b36, 0, .36);
     part(.13, .12, .13, 0xcb9e53, 0, .89);
