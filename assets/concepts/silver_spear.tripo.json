@@ -11,13 +11,16 @@
   "face_limit": 10000,
   "smart_low_poly": true,
   "runtime_texture_max_size": 1024,
-  "status": "not_submitted_authentication_failed",
-  "task_id": null,
+  "status": "success",
+  "task_id": "7ad8ef5f-51c1-4932-a001-2550d1adc94c",
   "credential_probe": "TRIPO_API_KEY=SET",
-  "failure": "Tripo upload returned HTTP 401 code 1002 Authentication failed; no model task was created.",
+  "failure": null,
   "references_read": [
     "threejs-3d-generator/references/api-notes.md",
     "threejs-3d-generator/references/threejs-integration.md",
     "threejs-3d-generator/references/image-generator-workflows.md"
-  ]
+  ],
+  "base_url": "https://openapi.tripo3d.com/v3",
+  "region": "cn",
+  "credits_consumed": 70.0
 }

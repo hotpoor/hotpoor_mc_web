@@ -106,5 +106,35 @@
     "triangles": 8980,
     "bytes": 1302672,
     "texture_max_size": 1024
+  },
+  "silver_spear": {
+    "task_id": "7ad8ef5f-51c1-4932-a001-2550d1adc94c",
+    "model": "v3.1-20260211",
+    "source": "GPT image to Tripo CN v3 model",
+    "reference": "assets/concepts/silver_spear.png",
+    "triangles": 11580,
+    "bytes": 2004060,
+    "source_bytes": 10518664,
+    "materials": 1,
+    "meshes": 1,
+    "textures": [
+      {
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg"
+      },
+      {
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/jpeg"
+      },
+      {
+        "width": 1024,
+        "height": 1024,
+        "mime": "image/png"
+      }
+    ],
+    "animations": 0,
+    "texture_max_size": 1024
   }
 }

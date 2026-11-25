@@ -4,7 +4,7 @@ import * as THREE from './vendor/three.module.js';
 import { CrowdRenderer } from './crowd-renderer.js?v=56';
 import { buildOpenWorldArt } from './open-world-art.js?v=55';
 
-import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=59';
+import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=60';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
@@ -150,7 +150,7 @@ export class Renderer3D {
     const weapons = {};
     for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'silver_spear', 'beam']) {
       const weapon = makeWeapon(kind, overlay, false);
-      if(kind==='silver_spear'&&overlay)weapon.scale.setScalar(.55);
+      if(kind==='silver_spear'&&overlay)weapon.scale.setScalar(.70);
       weapon.position.set(0, -.58, .12);
       weapon.visible = kind === 'sword';
       right.pivot.add(weapon);
@@ -881,7 +881,7 @@ export class Renderer3D {
             }
             const blade = box(.1, .85, .12, 0xc9d0cc, -.22);
             blade.position.z = .3;
-            if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(0,-.55,.15);arms[1].add(silver);}else arms[1].add(blade);
+            if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(0,-.55,.15);arms[1].add(silver);mesh.userData.silverWeapon=silver;}else arms[1].add(blade);
             if (boss) {
               body.add(box(.22, .32, .19, 0x382923, 1.41));
               body.scale.setScalar(1.2);
@@ -1034,7 +1034,7 @@ export class Renderer3D {
             arm.material = new THREE.MeshLambertMaterial({ map: skin.sleeve });
             arm.position.x = side * .45; mesh.add(arm);
           }
-          if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(.5,.5,.1);mesh.add(silver);}
+          if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(.5,.5,.1);mesh.add(silver);mesh.userData.silverWeapon=silver;}
           const label = labelSprite(obj.name + ' · 对话 E', '#91e9d4', 448, 100, 38);
           label.position.y = 2.5; label.scale.set(3.1, .7, 1); label.material.depthTest = true; mesh.add(label);
         } else if (obj.kind === 'chapter_gate') {
@@ -1100,6 +1100,7 @@ export class Renderer3D {
       this.applyHitFlash(mesh, !!obj.hurt && Math.floor(this.time * 12) % 2 === 0);
       mesh.position.set(obj.x, obj.y || 0, obj.z);
       mesh.traverse(part=>{if(part.isSprite)part.visible=distance<(this.monocular?145:26)});
+      if(mesh.userData.silverWeapon&&distance<12)mesh.userData.silverWeapon.userData.loadModel?.();
       if(mesh.userData.cityFlag){const color=this.world.teams[obj.owner]?.color||this.world.factions?.[obj.owner]?.color||'#d5b65e';mesh.userData.cityFlag.material.color.set(color);for(const f of this.openCityFlags?.get(obj.city)||[])f.material.color.set(color);}
       if (obj.kind === 'chapter_gate') {
         mesh.children[0].rotation.z = this.time * .6;
