@@ -1,0 +1,23 @@
+{
+  "asset": "silver_spear",
+  "reference": "assets/concepts/silver_spear.png",
+  "source": "GPT image reference",
+  "provider": "Tripo3D",
+  "model_version": "v3.1-20260211",
+  "orientation": "align_image",
+  "texture_alignment": "original_image",
+  "texture_quality": "detailed",
+  "geometry_quality": "detailed",
+  "face_limit": 10000,
+  "smart_low_poly": true,
+  "runtime_texture_max_size": 1024,
+  "status": "not_submitted_authentication_failed",
+  "task_id": null,
+  "credential_probe": "TRIPO_API_KEY=SET",
+  "failure": "Tripo upload returned HTTP 401 code 1002 Authentication failed; no model task was created.",
+  "references_read": [
+    "threejs-3d-generator/references/api-notes.md",
+    "threejs-3d-generator/references/threejs-integration.md",
+    "threejs-3d-generator/references/image-generator-workflows.md"
+  ]
+}
