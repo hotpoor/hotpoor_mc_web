@@ -8,6 +8,7 @@ import { makeWeapon, poseBow, voxelMaterial } from './voxel-art.js?v=60';
 
 import { makeSkin, SKIN_NAMES } from './player-skins.js?v=49';
 
+const MELEE_WEAPONS = ['sword','axe','mace','hammer','dual','spear','blade','halberd','silver_spear'];
 const TEAM_HEX = { red: 0xef4f4f, blue: 0x4c86f0 };
 const ARC = Math.PI * 65 / 180;
 
@@ -151,7 +152,7 @@ export class Renderer3D {
     for (const kind of ['sword', 'bow', 'rocket', 'gun', 'axe', 'mace', 'hammer', 'dual', 'spear', 'blade', 'halberd', 'silver_spear', 'beam']) {
       const weapon = makeWeapon(kind, overlay, false);
       if(kind==='silver_spear'&&overlay)weapon.scale.setScalar(.70);
-      weapon.position.set(0, -.58, .12);
+      weapon.position.set(0, MELEE_WEAPONS.includes(kind) ? -.56 : -.58, MELEE_WEAPONS.includes(kind) ? .02 : .12);
       weapon.visible = kind === 'sword';
       right.pivot.add(weapon);
       weapons[kind] = weapon;
@@ -169,7 +170,7 @@ export class Renderer3D {
     crystal.visible = false;
     left.pivot.add(crystal);
     const secondSword = makeWeapon('dual', overlay, false);
-    secondSword.position.set(0, -.58, .12);
+    secondSword.position.set(0, -.56, .02);
     secondSword.visible = false;
     left.pivot.add(secondSword);
     const rig = { right, left, weapons, charge, crystal, secondSword };
@@ -202,7 +203,7 @@ export class Renderer3D {
     rig.weapons[weapon]?.userData.loadModel?.();
     if(weapon==='dual')rig.secondSword.userData.loadModel?.();
     const right = rig.right.pivot;
-    right.position.y = weapon === 'silver_spear' ? (rig === this.viewRig ? .26 : .12) : 0;
+    right.position.y = weapon === 'silver_spear' ? (rig === this.viewRig ? .10 : .05) : 0;
     const left = rig.left.pivot;
     const bow = weapon === 'bow';
     this.showWeapon(rig.weapons, weapon);
@@ -224,17 +225,17 @@ export class Renderer3D {
       rig.weapons.bow.rotation.set(-right.rotation.x, Math.PI, .32);
       poseBow(rig.weapons.bow, draw);
     } else {
-      right.rotation.set(-.38 + walk * .7 - swing * 1.45, swing * .62, swing * .56);
+      // Bend the forearm forward; the grip sits inside the palm. Counter-rotate
+      // the weapon at rest so the shaft leaves the arm instead of entering it.
+      right.rotation.set(-.95 + walk * .25 - swing * 1.15, swing * .45, -.08 + swing * .5);
       left.rotation.set(-walk * .7, 0, 0);
-      rig.weapons.sword.rotation.set(.28, 0, -.12);
-      rig.weapons.axe.rotation.set(.28, 0, -.12);
-      rig.weapons.mace.rotation.set(.28, 0, -.12);
-      rig.weapons.hammer.rotation.set(.28, 0, -.12);
+      for(const kind of MELEE_WEAPONS)rig.weapons[kind].rotation.set(.95,0,-.08);
     }
     rig.secondSword.visible = weapon === 'dual' && !carriesCrystal;
     if (rig.secondSword.visible) {
       left.visible = true;
-      left.rotation.x = -.38 - swing;
+      left.rotation.x = -.95 - swing;
+      rig.secondSword.rotation.set(.95,0,.08);
     }
     rig.crystal.visible = carriesCrystal;
     if (carriesCrystal) {
@@ -882,7 +883,7 @@ export class Renderer3D {
             }
             const blade = box(.1, .85, .12, 0xc9d0cc, -.22);
             blade.position.z = .3;
-            if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(0,-.55,.15);arms[1].add(silver);mesh.userData.silverWeapon=silver;}else arms[1].add(blade);
+            if(obj.weapon==='silver_spear'){const silver=makeWeapon('silver_spear',false,false);silver.position.set(0,-.56,.02);silver.rotation.x=.95;arms[1].add(silver);mesh.userData.silverWeapon=silver;}else arms[1].add(blade);
             if (boss) {
               body.add(box(.22, .32, .19, 0x382923, 1.41));
               body.scale.setScalar(1.2);
@@ -963,7 +964,7 @@ export class Renderer3D {
             const arm=new THREE.Group();arm.position.set(side*.43,1.35,0);arm.add(box(.22,.65,.24,0x9c8058,-.29));body.add(arm);arms.push(arm);
           }
           const hoe=new THREE.Group();hoe.add(box(.07,.85,.07,0x634a2f,-.45));const blade=box(.35,.09,.2,0x848b8a,-.02);hoe.add(blade);hoe.position.set(0,-.4,.25);arms[1].add(hoe);
-          const sword=makeWeapon(obj.weapon||'sword',false,false);sword.position.set(0,-.55,.15);arms[1].add(sword);
+          const sword=makeWeapon(obj.weapon||'sword',false,false);sword.position.set(0,-.56,.02);sword.rotation.x=.95;arms[1].add(sword);
           mesh.add(body);mesh.userData.villager={body,hat,armor,helmet,legs,arms,hoe,sword};
           const cv=document.createElement('canvas');cv.width=640;cv.height=120;const map=new THREE.CanvasTexture(cv);map.colorSpace=THREE.SRGBColorSpace;
           const status=new THREE.Sprite(new THREE.SpriteMaterial({map,depthTest:true,depthWrite:false}));status.position.y=2.6;status.scale.set(4.2,.8,1);mesh.add(status);mesh.userData.villagerStatus={cv,map,key:''};
@@ -1119,7 +1120,7 @@ export class Renderer3D {
       }
       if(mesh.userData.villager){
         const v=mesh.userData.villager,soldier=obj.role==='soldier';v.body.rotation.y=obj.yaw||0;v.hat.visible=!soldier;v.armor.visible=v.helmet.visible=v.sword.visible=soldier;v.hoe.visible=!soldier;if(soldier&&distance<8)v.sword.userData.loadModel?.();
-        v.legs.forEach((leg,i)=>leg.rotation.x=obj.moving?Math.sin(this.time*7+i*Math.PI)*.4:0);v.arms[1].rotation.x=obj.attacking?-1.4:obj.working?Math.sin(this.time*12)*.6-.5:-.2;
+        v.legs.forEach((leg,i)=>leg.rotation.x=obj.moving?Math.sin(this.time*7+i*Math.PI)*.4:0);v.arms[1].rotation.x=soldier?(obj.attacking?-1.8:-.95):obj.working?Math.sin(this.time*12)*.6-.5:-.2;
         const s=mesh.userData.villagerStatus,key=obj.name+obj.owner+obj.role+obj.hp+obj.heal+(obj.favor?.[viewerName]||0);
         if(s.key!==key){const ctx=s.cv.getContext('2d');ctx.fillStyle='#16231fee';ctx.fillRect(0,0,640,120);ctx.fillStyle=soldier?'#98dfff':'#f1e6b3';ctx.font='bold 29px sans-serif';ctx.textAlign='center';
           ctx.fillText(obj.name+' · '+(soldier?obj.owner+(obj.is_general?'的武将':'的小兵'):'闲居村民 · E'),320,36,620);ctx.fillStyle='#98d899';ctx.fillRect(10,60,620*obj.hp/obj.max_hp,48);ctx.fillStyle='#fff';ctx.fillText(soldier?obj.hp+'/'+obj.max_hp+(obj.heal?' 回血+'+obj.heal+'/秒':''):'好感 '+(obj.favor?.[viewerName]||0)+'/80 · 帮忙耕种可招募',320,94,620);s.map.needsUpdate=true;s.key=key;}
@@ -1151,7 +1152,7 @@ export class Renderer3D {
         body.rotation.y = obj.yaw || 0;
         const moving = mesh.userData.lastX !== undefined && Math.hypot(obj.x - mesh.userData.lastX, obj.z - mesh.userData.lastZ) > .001;
         legs.forEach((leg, i) => leg.rotation.x = moving ? Math.sin(this.time * 8 + i * Math.PI) * .5 : 0);
-        arms[1].rotation.x = obj.attacking ? -1.8 : -.15;
+        arms[1].rotation.x = obj.attacking ? -1.8 : obj.weapon === 'silver_spear' ? -.95 : -.15;
         body.position.y = obj.hurt ? .09 : 0;
         mesh.userData.lastX = obj.x; mesh.userData.lastZ = obj.z;
       }
