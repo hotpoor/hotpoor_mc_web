@@ -389,7 +389,7 @@ class OpenWorldGame(Game):
             pet=min((o for o in companions if o.get('team')!=enemy['team'] and math.hypot(o['x']-enemy['x'],o['z']-enemy['z'])<2
                      and not self.blocked(enemy['x'],enemy['z'],o['x'],o['z'])),key=lambda o:math.hypot(o['x']-enemy['x'],o['z']-enemy['z']),default=None)
             if pet and now-enemy['last_attack']>=1.2:
-                enemy['last_attack']=now;farm_system.hurt(self,pet,20 if enemy.get('boss') else 9,now);continue
+                enemy['last_attack']=now;farm_system.hurt(self,pet,65 if enemy.get('weapon')=='silver_spear' else 20 if enemy.get('boss') else 9,now);continue
             target=min(nearby,key=lambda p:math.hypot(p.x-enemy['x'],p.z-enemy['z']))
             distance=math.hypot(target.x-enemy['x'],target.z-enemy['z'])
             chasing=distance<(20 if enemy.get('boss') else 16)

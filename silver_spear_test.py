@@ -28,6 +28,9 @@ def main():
  assert zhao['weapon']=='silver_spear' and zhao['attack_damage']==65
  p2=Player('r','赵云主公','red',None,zhao['x'],zhao['z']);world.players[p2.id]=p2
  p2.armor={};p2.invuln_until=0;world.advance_enemies(0,time.monotonic());assert p2.hp==35
+ soldier=next(o for o in world.objects if o['kind']=='villager');soldier.update(role='soldier',team='red',owner=p2.name,x=zhao['x'],z=zhao['z'],hp=120);zhao['last_attack']=0
+ world.advance_enemies(0,time.monotonic());assert soldier['hp']==55
+ soldier['hp']=0
  world.damage_object(p2,zhao,10000,time.monotonic());assert any(o['kind']=='weapon_pickup' and o['weapon']=='silver_spear' and o.get('uses')==40 for o in world.objects)
  world.city_owners[zhao['city']]='red';world._sync_city_objects();world.interact(p2,time.monotonic());assert zhao['kind']=='villager' and zhao['weapon']=='silver_spear' and zhao['attack_damage']==65
  target=Player('enemy','靶','blue',None,zhao['x'],zhao['z']+1);world.players[target.id]=target;zhao['last_attack']=0;farm_system.advance(world,0,time.monotonic()+2);assert target.hp==35
