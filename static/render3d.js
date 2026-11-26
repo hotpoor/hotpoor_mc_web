@@ -1248,7 +1248,7 @@ export class Renderer3D {
   spawnFarm(event) {
     this.spawnHit({x:event.x,y:.2,z:event.z});
     const hit=this.hits[this.hits.length-1];
-    for(const spark of hit.mesh.children)spark.material.color.setHex(event.harvest?0xf6d773:0x8fd66a);
+    for(const spark of hit.mesh.children)spark.material.color.setHex(event.fertilize?0xb58a52:event.harvest?0xf6d773:0x8fd66a);
   }
 
   spawnHit(event) {

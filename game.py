@@ -421,6 +421,8 @@ class Game:
             return
         now = time.monotonic()
         if kind in ("feed", "feed_poop"):
+            if kind == "feed_poop" and farm_system.fertilize(self, p, now):
+                return
             animal_system.feed(self, p, now, poop=kind == "feed_poop")
             return
         if kind == "interact":
@@ -727,7 +729,7 @@ class Game:
             if ore["kind"] == "poop_pickup":
                 player.poop += 1
                 self.objects.remove(ore)
-                self.emit({"k": "story", "id": player.id, "text": "捡到狗屎 · %d/10 · R 单独喂给狗，可能降低好感并被咬" % player.poop})
+                self.emit({"k": "story", "id": player.id, "text": "捡到狗屎 · %d/10 · R 农田施肥减5秒 / 喂狗" % player.poop})
                 return
             if ore["kind"] == "food_pickup":
                 amount = min(20 - player.food, ore["amount"])

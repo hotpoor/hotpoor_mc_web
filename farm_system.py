@@ -80,6 +80,29 @@ def work(game, p, plot, now):
     game.emit({'k': 'farm_work', 'id': p.id, 'x': plot['x'], 'z': plot['z'], 'harvest': stage == 3})
 
 
+def fertilize(game, p, now):
+    """Return whether a nearby field handled R; never feed a dog through a field."""
+    if not p.alive or p.recall_until or p.jump >= 1.4 or now-p.last_feed < .8:
+        return True
+    plot = min((o for o in game.objects if o['kind']=='farm' and o['hp']>0
+                and math.hypot(o['x']-p.x,o['z']-p.z)<=3.5
+                and not game.blocked(p.x,p.z,o['x'],o['z'])),
+               key=lambda o:math.hypot(o['x']-p.x,o['z']-p.z),default=None)
+    if not plot:return False
+    if plot['stage']!=2 or plot['grow_until']<=now:
+        if plot['stage']==2:plot['stage']=3
+        message(game,p,'只有生长中的庄稼可以施肥，未消耗狗屎。');return True
+    if p.poop<=0:
+        message(game,p,'没有狗屎，按 E 拾取后再来施肥。');return True
+    p.poop-=1;p.last_feed=now
+    plot['grow_until']=max(now,plot['grow_until']-5)
+    if plot['grow_until']<=now:plot['stage']=3
+    save(game)
+    message(game,p,'施肥成功 · 生长时间缩短5秒 · '+('庄稼已成熟！' if plot['stage']==3 else '还有%d秒'%math.ceil(plot['grow_until']-now)))
+    game.emit(dict(k='farm_work',id=p.id,x=plot['x'],z=plot['z'],fertilize=True,harvest=False))
+    return True
+
+
 def recruit(game, p, farmer, now):
     if farmer['owner']:
         message(game, p, farmer['name'] + ('已是你的小兵，会跟随并助战。' if farmer['owner'] == p.name else '已追随 ' + farmer['owner']))

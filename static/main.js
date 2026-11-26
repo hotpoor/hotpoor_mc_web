@@ -1004,7 +1004,8 @@ function updateHud() {
   $('pet-status').textContent = near ? '村犬 · 好感 ' + Math.round(near.favor?.[G.name] || 0) + '/100 · 饱食 ' + Math.round(near.hunger) + '/100' + (near.owner ? ' · 主人 ' + near.owner : ' · 未驯服')
     : mine.length ? '伙伴犬 ' + mine.length + '只 · ' + mine.map(dog => dog.hp > 0 ? dog.hp + '/' + dog.max_hp : '恢复中 ' + dog.cooldown + '秒').join('，') : '靠近村犬 · F 喂粮 / R 喂狗屎';
   $('feed-dog').disabled = !me.alive || !me.food || !near;
-  $('feed-poop').disabled = !me.alive || !me.poop || !near;
+  $('feed-poop').disabled = !me.alive || !me.poop || !(near || field);
+  $('feed-poop').textContent = field ? '农田施肥 · 减5秒 · R' : '喂狗屎 · R';
   $('collect-btn').textContent = me.syllable ? '存入拼音 · E' : me.carriesCrystal ? '携带 1 颗 · E 修复或放下' : field ? '军屯 · ' + ['E 耕地','E 播种','成长 ' + field.grow_cd + '秒','E 收获'][field.stage] : nearFarmer ? '村民交互 · E' : '拾取 / 交互 · E';
   $('collect-btn').disabled = !me.alive || !!me.recall;
   $('team-transfer-btn').textContent=me.recall&&me.transferTarget?'传送队友中 · '+me.recall.toFixed(1)+'秒':me.transferCd?'传送队友 · '+me.transferCd+'秒':'传送到队友 · C';
